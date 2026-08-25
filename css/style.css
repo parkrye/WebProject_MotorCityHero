@@ -1,0 +1,39 @@
+/* 오락실 캐비닛 느낌의 레터박스. 캔버스는 4:3(1024x768)을 유지한 채 화면에 맞춰 축소된다. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  background: #05070c;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.cabinet {
+  /* 4:3 을 유지하면서 뷰포트 안에 최대한 크게 */
+  width: min(100vw, calc(100vh * 4 / 3));
+  height: min(100vh, calc(100vw * 3 / 4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #05070c;
+  box-shadow: 0 0 0 2px #1b2233, 0 18px 60px rgba(0, 0, 0, 0.75);
+  image-rendering: auto;
+}

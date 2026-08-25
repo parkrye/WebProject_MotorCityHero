@@ -1,0 +1,302 @@
+// build_sprites.py 가 생성한 파일. 직접 수정하지 말 것.
+window.SPRITE_MANIFEST = {
+  "player": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "anchorX": 128.0,
+    "anims": {
+      "idle": {
+        "file": "player_idle.png",
+        "frames": 8
+      },
+      "walk": {
+        "file": "player_walk.png",
+        "frames": 8
+      },
+      "attack": {
+        "file": "player_attack.png",
+        "frames": 8
+      },
+      "hit": {
+        "file": "player_hit.png",
+        "frames": 8
+      }
+    }
+  },
+  "enemies": {
+    "1": {
+      "frameWidth": 216,
+      "frameHeight": 256,
+      "anchorX": 108.0,
+      "anims": {
+        "move": {
+          "file": "enemy_1_move.png",
+          "frames": 8
+        }
+      }
+    },
+    "2": {
+      "frameWidth": 130,
+      "frameHeight": 256,
+      "anchorX": 65.0,
+      "anims": {
+        "move": {
+          "file": "enemy_2_move.png",
+          "frames": 8
+        }
+      }
+    },
+    "3": {
+      "frameWidth": 134,
+      "frameHeight": 256,
+      "anchorX": 67.0,
+      "anims": {
+        "move": {
+          "file": "enemy_3_move.png",
+          "frames": 8
+        }
+      }
+    },
+    "4": {
+      "frameWidth": 247,
+      "frameHeight": 256,
+      "anchorX": 124.0,
+      "anims": {
+        "move": {
+          "file": "enemy_4_move.png",
+          "frames": 8
+        }
+      }
+    },
+    "5": {
+      "frameWidth": 149,
+      "frameHeight": 256,
+      "anchorX": 74.0,
+      "anims": {
+        "move": {
+          "file": "enemy_5_move.png",
+          "frames": 8
+        }
+      }
+    },
+    "6": {
+      "frameWidth": 219,
+      "frameHeight": 256,
+      "anchorX": 110.0,
+      "anims": {
+        "move": {
+          "file": "enemy_6_move.png",
+          "frames": 8
+        }
+      }
+    }
+  },
+  "background": "game_bg.png",
+  "backgroundSize": [
+    1448,
+    1086
+  ],
+  "icons": {
+    "heartIcon": {
+      "file": "heartIcon.png",
+      "width": 182,
+      "height": 128
+    },
+    "coin": {
+      "file": "coin.png",
+      "width": 194,
+      "height": 128
+    },
+    "healItem": {
+      "file": "healItem.png",
+      "width": 173,
+      "height": 128
+    }
+  },
+  "font": {
+    "file": "font.png",
+    "refHeight": 128,
+    "glyphs": {
+      "A": {
+        "x": 0,
+        "width": 128,
+        "height": 124
+      },
+      "B": {
+        "x": 130,
+        "width": 113,
+        "height": 124
+      },
+      "C": {
+        "x": 245,
+        "width": 115,
+        "height": 124
+      },
+      "D": {
+        "x": 362,
+        "width": 119,
+        "height": 124
+      },
+      "E": {
+        "x": 483,
+        "width": 111,
+        "height": 124
+      },
+      "F": {
+        "x": 596,
+        "width": 118,
+        "height": 124
+      },
+      "G": {
+        "x": 716,
+        "width": 121,
+        "height": 123
+      },
+      "H": {
+        "x": 839,
+        "width": 121,
+        "height": 123
+      },
+      "I": {
+        "x": 962,
+        "width": 87,
+        "height": 123
+      },
+      "J": {
+        "x": 1051,
+        "width": 120,
+        "height": 123
+      },
+      "K": {
+        "x": 1173,
+        "width": 125,
+        "height": 123
+      },
+      "L": {
+        "x": 1300,
+        "width": 116,
+        "height": 123
+      },
+      "M": {
+        "x": 1418,
+        "width": 128,
+        "height": 124
+      },
+      "N": {
+        "x": 1548,
+        "width": 119,
+        "height": 124
+      },
+      "O": {
+        "x": 1669,
+        "width": 118,
+        "height": 124
+      },
+      "P": {
+        "x": 1789,
+        "width": 117,
+        "height": 124
+      },
+      "Q": {
+        "x": 1908,
+        "width": 128,
+        "height": 128
+      },
+      "R": {
+        "x": 2038,
+        "width": 119,
+        "height": 124
+      },
+      "S": {
+        "x": 2159,
+        "width": 115,
+        "height": 123
+      },
+      "T": {
+        "x": 2276,
+        "width": 118,
+        "height": 123
+      },
+      "U": {
+        "x": 2396,
+        "width": 118,
+        "height": 123
+      },
+      "V": {
+        "x": 2516,
+        "width": 123,
+        "height": 123
+      },
+      "W": {
+        "x": 2641,
+        "width": 135,
+        "height": 123
+      },
+      "X": {
+        "x": 2778,
+        "width": 119,
+        "height": 123
+      },
+      "Y": {
+        "x": 2899,
+        "width": 124,
+        "height": 124
+      },
+      "Z": {
+        "x": 3025,
+        "width": 118,
+        "height": 124
+      },
+      "0": {
+        "x": 3145,
+        "width": 116,
+        "height": 124
+      },
+      "1": {
+        "x": 3263,
+        "width": 92,
+        "height": 124
+      },
+      "2": {
+        "x": 3357,
+        "width": 113,
+        "height": 124
+      },
+      "3": {
+        "x": 3472,
+        "width": 118,
+        "height": 124
+      },
+      "4": {
+        "x": 3592,
+        "width": 126,
+        "height": 121
+      },
+      "5": {
+        "x": 3720,
+        "width": 118,
+        "height": 121
+      },
+      "6": {
+        "x": 3840,
+        "width": 115,
+        "height": 121
+      },
+      "7": {
+        "x": 3957,
+        "width": 120,
+        "height": 121
+      },
+      "8": {
+        "x": 4079,
+        "width": 122,
+        "height": 121
+      },
+      "9": {
+        "x": 4203,
+        "width": 118,
+        "height": 121
+      }
+    }
+  }
+};
