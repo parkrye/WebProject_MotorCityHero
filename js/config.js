@@ -75,11 +75,28 @@ const CONFIG = {
   },
 
   // 로비 메뉴. 위아래로 고르고 확인키로 들어간다.
+  // 메뉴 아래 한 줄이 토글 버튼 행이고, 그 줄에서는 좌우로 버튼을 고른다.
   lobby: {
     items: ["GAME START", "RANKING", "EXIT"],
     itemSize: 34,
-    itemGap: 54,
+    itemGap: 50,
     blinkHz: 3,
+    toggleIconSize: 50,
+    toggleGap: 160,   // 두 버튼 사이 간격
+    toggleLabelSize: 16,
+  },
+
+  // 옛날 오락기 모니터 흉내. 주사선 · 섀도우마스크 · 비네팅 · 흐르는 밝은 띠.
+  // 일부러 눈에 띄게 세게 잡았다. 약하게 하려면 strength 값들을 낮추면 된다.
+  crt: {
+    scanlineHeight: 3,     // 주사선 한 주기(캔버스 픽셀)
+    scanlineStrength: 0.4, // 어두운 줄이 얼마나 어두운지
+    maskStrength: 0.16,    // RGB 서브픽셀 마스크 세기
+    vignette: 0.5,         // 화면 가장자리 어둡기
+    rollSpeed: 150,        // 밝은 띠가 아래로 흐르는 속도(px/s)
+    rollHeight: 160,
+    rollStrength: 0.07,
+    flicker: 0.025,        // 밝기 미세 흔들림. 발작 위험이 없도록 아주 얕게 둔다
   },
 
   ranking: {

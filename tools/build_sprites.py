@@ -22,6 +22,7 @@ import json
 import shutil
 import subprocess
 import sys
+from collections import deque
 from pathlib import Path
 
 from PIL import Image
@@ -32,7 +33,7 @@ PAD_X = 4      # 좌우 크롭 여유
 PLAYER_ANIMS = ("idle", "walk", "attack", "hit")
 ENEMY_COUNT = 6
 
-ICONS = ("heartIcon", "coin", "healItem")
+ICONS = ("heartIcon", "coin", "healItem", "speaker", "screen")
 ICON_HEIGHT = 128
 
 # ── 용량 최적화 ────────────────────────────────────────────────────────────
@@ -223,9 +224,56 @@ def find_player_gifs(src, name):
     return None
 
 
+def strip_checker_background(icon):
+    """투명 표시용 체커보드가 픽셀로 그려진 이미지의 배경을 실제 투명으로 바꾼다.
+
+    가장자리에서 시작해 "밝은 무채색"으로 이어진 부분만 지운다. 아이콘 안쪽의
+    흰색 하이라이트는 가장자리와 이어져 있지 않으므로 그대로 남는다.
+    이미 투명한 부분이 있는 이미지는 손대지 않는다.
+    """
+    if icon.getchannel("A").getextrema()[0] < 255:
+        return icon
+
+    width, height = icon.size
+    pixels = icon.load()
+
+    def is_background(xy):
+        r, g, b, _ = pixels[xy]
+        return max(r, g, b) - min(r, g, b) < 14 and min(r, g, b) > 222
+
+    seen = bytearray(width * height)
+    queue = deque()
+
+    def seed(x, y):
+        if not seen[y * width + x] and is_background((x, y)):
+            seen[y * width + x] = 1
+            queue.append((x, y))
+
+    for x in range(width):
+        seed(x, 0)
+        seed(x, height - 1)
+    for y in range(height):
+        seed(0, y)
+        seed(width - 1, y)
+
+    if not queue:
+        return icon
+
+    while queue:
+        x, y = queue.popleft()
+        pixels[x, y] = (0, 0, 0, 0)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    seed(nx, ny)
+
+    return icon
+
+
 def bake_icon(path, out_dir):
     """아이콘은 여백을 잘라내고 높이 기준으로 줄여서 저장한다."""
-    icon = Image.open(path).convert("RGBA")
+    icon = strip_checker_background(Image.open(path).convert("RGBA"))
     box = icon.getchannel("A").getbbox()
     icon = icon.crop(box)
 

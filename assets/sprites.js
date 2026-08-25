@@ -134,6 +134,16 @@ window.SPRITE_MANIFEST = {
       "file": "healItem.png",
       "width": 173,
       "height": 128
+    },
+    "speaker": {
+      "file": "speaker.png",
+      "width": 159,
+      "height": 128
+    },
+    "screen": {
+      "file": "screen.png",
+      "width": 127,
+      "height": 128
     }
   },
   "font": {

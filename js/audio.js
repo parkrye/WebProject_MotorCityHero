@@ -16,6 +16,7 @@ class AudioBank {
     this.bgm = new Map();
     this.currentBgm = null;
     this.unlocked = false;
+    this.muted = false;
 
     for (const [name, file] of Object.entries(manifest.sfx ?? {})) {
       this.pools.set(name, {
@@ -50,12 +51,29 @@ class AudioBank {
         .then(() => {
           element.pause();
           element.currentTime = 0;
-          element.muted = false;
+          element.muted = this.muted;
         })
         .catch(() => {
-          element.muted = false;
+          element.muted = this.muted;
         });
     }
+  }
+
+  /** 로비의 스피커 버튼. 볼륨 단계 없이 켜고 끄기만 한다. */
+  setMuted(muted) {
+    this.muted = muted;
+
+    for (const pool of this.pools.values()) {
+      for (const element of pool.items) element.muted = muted;
+    }
+    for (const element of this.bgm.values()) {
+      element.muted = muted;
+    }
+  }
+
+  toggleMuted() {
+    this.setMuted(!this.muted);
+    return !this.muted;
   }
 
   play(name, volume = 1) {

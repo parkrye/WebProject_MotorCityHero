@@ -17,43 +17,63 @@ function drawHighlight(ctx, x, y, width, height, alpha = 1) {
   ctx.restore();
 }
 
-/** 로비. GAME START / RANKING / EXIT 를 위아래로 고른다. */
+/**
+ * 로비. GAME START / RANKING / EXIT 를 위아래로 고르고,
+ * 맨 아래 한 줄은 소리·화면 토글 버튼이라 그 줄에서만 좌우가 먹는다.
+ */
 class LobbyMenu {
-  constructor(ctx, font) {
+  constructor(ctx, font, icons) {
     this.ctx = ctx;
     this.font = font;
-    this.index = 0;
-    this.time = 0;
+    this.icons = icons;
+    this.reset();
   }
 
   reset() {
     this.index = 0;
+    this.toggleIndex = 0; // 0 = 소리, 1 = 화면
     this.time = 0;
   }
 
-  /** @returns {"start"|"ranking"|"exit"|null} */
+  /** 메뉴 항목 수 + 토글 버튼 줄 하나. */
+  get rowCount() {
+    return CONFIG.lobby.items.length + 1;
+  }
+
+  get onToggleRow() {
+    return this.index === CONFIG.lobby.items.length;
+  }
+
+  /** @returns {"start"|"ranking"|"exit"|"toggleSound"|"toggleScreen"|null} */
   update(dt, input, audio) {
     this.time += dt;
 
     const step = input.menuStep();
     if (step.y !== 0) {
-      const count = CONFIG.lobby.items.length;
-      this.index = (this.index + step.y + count) % count;
+      this.index = (this.index + step.y + this.rowCount) % this.rowCount;
+      audio.play("button");
+    }
+    if (step.x !== 0 && this.onToggleRow) {
+      this.toggleIndex = (this.toggleIndex + step.x + 2) % 2;
       audio.play("button");
     }
 
     if (!input.confirmed) return null;
 
     audio.play("button");
+    if (this.onToggleRow) {
+      return this.toggleIndex === 0 ? "toggleSound" : "toggleScreen";
+    }
     return ["start", "ranking", "exit"][this.index];
   }
 
-  draw() {
+  /** @param {{sound: boolean, screen: boolean}} toggles 현재 켜짐 여부 */
+  draw(toggles) {
     const ctx = this.ctx;
     const { width, height } = CONFIG.view;
     const { items, itemSize, itemGap, blinkHz } = CONFIG.lobby;
 
-    const top = height * 0.52;
+    const top = height * 0.5;
     const blink = Math.floor(this.time * blinkHz) % 2 === 0;
 
     items.forEach((label, index) => {
@@ -69,6 +89,43 @@ class LobbyMenu {
         align: "center",
         alpha: selected ? 1 : 0.55,
       });
+    });
+
+    this.#drawToggles(top + items.length * itemGap + 16, toggles, blink);
+  }
+
+  #drawToggles(y, toggles, blink) {
+    const { toggleGap } = CONFIG.lobby;
+    const centerX = CONFIG.view.width / 2;
+
+    this.#drawToggle(centerX - toggleGap / 2, y, this.icons.speaker, toggles.sound, 0, blink);
+    this.#drawToggle(centerX + toggleGap / 2, y, this.icons.screen, toggles.screen, 1, blink);
+  }
+
+  /** 꺼진 버튼은 흐리게 두고 아래에 ON / OFF 를 적어 상태를 분명히 한다. */
+  #drawToggle(centerX, y, icon, on, slot, blink) {
+    if (!icon) return;
+
+    const ctx = this.ctx;
+    const { toggleIconSize, toggleLabelSize } = CONFIG.lobby;
+    const width = icon.width * (toggleIconSize / icon.height);
+    const selected = this.onToggleRow && this.toggleIndex === slot;
+
+    if (selected) {
+      // 아이콘과 그 아래 ON/OFF 라벨까지 함께 감싼다.
+      const boxHeight = toggleIconSize + toggleLabelSize + 34;
+      drawHighlight(ctx, centerX - width / 2 - 16, y - 12, width + 32, boxHeight, blink ? 1 : 0.45);
+    }
+
+    ctx.save();
+    ctx.globalAlpha = on ? 1 : 0.28;
+    ctx.drawImage(icon, centerX - width / 2, y, width, toggleIconSize);
+    ctx.restore();
+
+    this.font.draw(ctx, on ? "ON" : "OFF", centerX, y + toggleIconSize + 8, {
+      size: toggleLabelSize,
+      align: "center",
+      alpha: on ? 0.85 : 0.5,
     });
   }
 }

@@ -59,6 +59,7 @@ NumLock 상태와 무관하고, 문자열 위쪽의 숫자열(`Digit0`~`Digit9`)
 - **생명과 코인은 1P·2P 가 공유**합니다. 누가 맞든 팀 생명이 1 줄고, 누가 회복 아이템을 먹든 1 늡니다.
 - 넘패드에서 `NumpadEnter`(세로 2칸)를 고른 이유는 손을 보지 않고 누를 수 있는 큰 키라서입니다.
 - 메뉴·랭킹·이름 등록 화면은 1P 와 2P 중 아무나 조작할 수 있습니다.
+- 로비 메뉴 맨 아랫줄은 **소리 · 화면 토글 버튼** 줄입니다. 그 줄에서만 좌우가 버튼 선택으로 쓰입니다.
 
 모든 스프라이트는 오른쪽이 정방향이며, 왼쪽을 볼 때만 `ctx.scale(-1, 1)` 로 좌우 반전해서 그립니다.
 위/아래만 입력했을 때는 보던 방향을 유지합니다.
@@ -69,7 +70,7 @@ NumLock 상태와 무관하고, 문자열 위쪽의 숫자열(`Digit0`~`Digit9`)
 ## 게임 플로우
 
 ```
-LOBBY      타이틀 + GAME START / RANKING / EXIT
+LOBBY      타이틀 + GAME START / RANKING / EXIT + 소리·화면 토글
   │
   ├─ GAME START
   │    INTRO      화면 좌측 밖에서 가로 1/3 지점까지 자동 이동 (조작 불가) + 타이틀
@@ -140,6 +141,27 @@ LOBBY      타이틀 + GAME START / RANKING / EXIT
 | `GET` | `/api/scores` | 정렬된 상위 100개 |
 | `POST` | `/api/scores` | `{name, score, stage, players, at}` 기록 후 갱신된 목록 반환 |
 
+### 화면 · 소리 토글
+
+로비 메뉴 아래 두 버튼입니다. 둘 다 **기본이 켜짐**이고, 누를 때마다 켜짐/꺼짐만 오갑니다
+(볼륨 단계나 강도 조절은 일부러 두지 않았습니다). 아이콘 아래 `ON` / `OFF` 로 상태를 표시하고,
+꺼진 버튼은 흐리게 그립니다. 설정은 저장하지 않아 새로고침하면 둘 다 다시 켜집니다.
+
+- **스피커**: 효과음과 BGM 을 한꺼번에 음소거합니다. BGM 은 멈추지 않고 계속 흐르다가
+  다시 켜면 이어서 들립니다.
+- **화면**: 옛날 오락기 브라운관 필터입니다. 켜져 있으면 화면 전체에 이런 효과가 걸립니다.
+
+| 요소 | 방식 |
+|---|---|
+| 주사선 + RGB 섀도우마스크 | 3x3 타일 패턴을 `multiply` 로 한 번 깔기 |
+| 가장자리 비네팅 | 미리 만들어둔 radial gradient |
+| 아래로 흐르는 밝은 띠 | linear gradient 를 `lighter` 로 |
+| 밝기·채도 보정 | CSS `filter: brightness(1.32) saturate(1.2)` — 주사선이 깎아낸 밝기를 되돌립니다 |
+
+픽셀을 직접 훑지 않고 `fillRect` 세 번으로 끝나서 매 프레임 그려도 부담이 없습니다.
+세기는 `CONFIG.crt` 에서 조절합니다. 밝기 흔들림(`flicker`)은 광과민성 발작 위험이 없도록
+아주 얕게(0.025) 잡아뒀습니다.
+
 ### 사운드
 
 효과음은 `assets/sfx/`, BGM 은 `assets/bgm/` 에 두고 매니페스트에 실린 것만 재생합니다.
@@ -204,6 +226,7 @@ js/enemy.js          추격 → 준비동작 → 타격 → 쿨다운 AI
 js/pickup.js         회복 아이템 (튀어오름 → 착지 → 소멸)
 js/spawner.js        점수 기반 스테이지 해금 · 스폰
 js/hud.js            생명 · 코인 · 점수 · 컨티뉴 · 암전 · 게임오버
+js/crt.js            브라운관 필터 (주사선 · 비네팅 · 흐르는 띠)
 js/screens.js        로비 메뉴 · 이름 등록 · 랭킹 화면
 js/game.js           게임 루프 · 카메라 · 상태 전이
 tools/serve.py       정적 서버 · LAN 공개 · 방화벽 규칙 · 랭킹 API
@@ -226,7 +249,7 @@ data/scores.json     랭킹 기록 (서버가 씀)
 <원본>/player2/player2_idle.gif ...          (선택. 없으면 2P 는 색조 폴백)
 <원본>/game_bg.png
 <원본>/enemy/enemy_1.gif ... enemy_6.gif
-<원본>/sprites/heartIcon.png  coin.png  healItem.png  font.png
+<원본>/sprites/heartIcon.png  coin.png  healItem.png  speaker.png  screen.png  font.png
 <원본>/sfx/attack.wav  hit.wav  coin.wav  heal.wav  enemy_die.wav  button.mp3  countdown.flac
 <원본>/bgm/lobby.mp3  main.mp3  countdown.mp3  game over.mp3  ranking.mp3
 ```
@@ -244,6 +267,10 @@ python tools/build_sprites.py <원본_에셋_폴더>
 매니페스트의 `frameWidth` · `frameHeight` · `anchorX` 는 **줄이기 전 원본 크기**입니다.
 게임이 그 크기로 그리기 때문에, 시트를 더 줄이거나 되돌려도 게임 쪽은 손댈 필요가 없습니다.
 `file://` 에서는 `fetch` 로 JSON 을 읽을 수 없어 매니페스트를 JS 전역으로도 굽습니다.
+
+아이콘 원본에 투명 표시용 체커보드가 **픽셀로 그려져** 있으면(내려받은 아이콘이 흔히 그렇습니다)
+가장자리에서 이어진 밝은 무채색 영역만 골라 투명으로 바꿉니다. 아이콘 안쪽의 흰색 하이라이트는
+가장자리와 이어져 있지 않으므로 그대로 남습니다.
 
 한 캐릭터의 모든 애니메이션은 **공통 x 범위로 크롭**되고 세로 256 을 그대로 유지합니다.
 그래야 애니메이션이 바뀌어도 캐릭터가 떨리지 않고, 발끝이 항상 바닥에 정렬됩니다.

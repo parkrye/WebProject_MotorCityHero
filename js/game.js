@@ -38,7 +38,8 @@ class Game {
     this.spawner = new Spawner(assets.enemies);
     this.hiScore = loadHiScore();
 
-    this.lobby = new LobbyMenu(this.ctx, assets.font);
+    this.crt = new CrtFilter(this.ctx, canvas);
+    this.lobby = new LobbyMenu(this.ctx, assets.font, assets.icons);
     this.nameEntry = new NameEntry(this.ctx, assets.font);
     this.ranking = new RankingView(this.ctx, assets.font, board);
 
@@ -150,6 +151,7 @@ class Game {
   }
 
   update(dt) {
+    this.crt.update(dt);
     if (this.#updateScreens(dt)) return;
 
     // 코인 투입은 플레이 중 어느 상태에서나 받는다. 컨티뉴 카운트다운 중에도 들어와야 한다.
@@ -200,6 +202,7 @@ class Game {
       return true;
     }
 
+
     if (this.state === GAME_STATE.RANKING) {
       this.audio.playBgm("ranking");
       if (this.ranking.update(dt, this.input, this.audio) === "back") {
@@ -230,6 +233,15 @@ class Game {
   }
 
   #handleLobbyChoice(choice) {
+    if (choice === "toggleSound") {
+      this.audio.toggleMuted();
+      this.audio.play("button"); // 다시 켠 순간 소리가 나는지 바로 확인시켜 준다
+      return;
+    }
+    if (choice === "toggleScreen") {
+      this.crt.toggle();
+      return;
+    }
     if (choice === "start") {
       this.#resetGame();
       this.audio.playBgm("game");
@@ -532,6 +544,7 @@ class Game {
     ctx.restore();
 
     this.#drawOverlay();
+    this.crt.draw();
   }
 
   #drawBackground(ctx) {
@@ -554,7 +567,7 @@ class Game {
     if (this.state === GAME_STATE.LOBBY) {
       this.hud.drawLobbyBackdrop();
       this.hud.drawTitle();
-      this.lobby.draw();
+      this.lobby.draw({ sound: !this.audio.muted, screen: this.crt.enabled });
       this.hud.drawControls(this.twoPlayer);
       return;
     }

@@ -40,3 +40,11 @@ body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+/*
+ * CRT 필터가 켜져 있을 때만. 주사선과 비네팅이 밝기를 깎아내므로 원본을 미리 밝혀둔다.
+ * 채도를 올리면 브라운관 형광체 같은 쨍한 색이 난다.
+ */
+#game.crt {
+  filter: brightness(1.32) saturate(1.2) contrast(1.06);
+}
