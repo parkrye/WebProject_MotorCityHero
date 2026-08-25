@@ -56,7 +56,7 @@ class Pickup {
     const width = this.image.width * scale;
     const height = this.image.height * scale;
 
-    drawShadow(ctx, screenX, this.y, width * 0.4, 0.28);
+    drawShadow(ctx, screenX, this.y, width * 0.4, "#000", 0.28);
     ctx.drawImage(this.image, screenX - width / 2, this.y - this.height - height, width, height);
   }
 }

@@ -15,10 +15,13 @@ import argparse
 import base64
 import http.server
 import ipaddress
+import json
 import os
 import socket
 import subprocess
 import sys
+import threading
+import time
 import webbrowser
 from http import HTTPStatus
 
@@ -29,9 +32,75 @@ FIREWALL_RULE_NAME = "MotorCityHero LAN"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IS_WINDOWS = os.name == "nt"
 
+# 랭킹. 레포 안 data/scores.json 에 그냥 담아둔다.
+SCORES_PATH = os.path.join(ROOT, "data", "scores.json")
+SCORES_API = "/api/scores"
+MAX_ENTRIES = 100
+MAX_NAME_LENGTH = 16
+MAX_BODY_BYTES = 4096
+NAME_CHARSET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ")
+scores_lock = threading.Lock()
+
+
+def clean_name(value):
+    """게임의 비트맵 폰트에 있는 글자만 남긴다."""
+    text = "".join(ch for ch in str(value or "").upper() if ch in NAME_CHARSET)
+    return text.strip()[:MAX_NAME_LENGTH] or "NO NAME"
+
+
+def clamp_int(value, low, high, default=0):
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def read_scores():
+    try:
+        with open(SCORES_PATH, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+
+    entries = data.get("entries") if isinstance(data, dict) else data
+    return entries if isinstance(entries, list) else []
+
+
+def rank_entries(entries):
+    """점수 내림차순. 같으면 먼저 올린 기록이 위로 간다."""
+    ordered = sorted(entries, key=lambda e: (-e.get("score", 0), e.get("at", 0)))
+    return ordered[:MAX_ENTRIES]
+
+
+def add_score(payload):
+    """기록 하나를 더하고 정리된 전체 목록을 돌려준다."""
+    entry = {
+        "name": clean_name(payload.get("name")),
+        "score": clamp_int(payload.get("score"), 0, 99_999_999),
+        "stage": clamp_int(payload.get("stage"), 1, 99, 1),
+        "players": clamp_int(payload.get("players"), 1, 2, 1),
+        "at": clamp_int(payload.get("at"), 0, 2**53, int(time.time() * 1000)),
+    }
+
+    with scores_lock:
+        entries = rank_entries(read_scores() + [entry])
+        os.makedirs(os.path.dirname(SCORES_PATH), exist_ok=True)
+
+        # 쓰다가 죽어도 기존 파일이 깨지지 않도록 임시 파일에 쓰고 바꿔치운다.
+        temp = SCORES_PATH + ".tmp"
+        with open(temp, "w", encoding="utf-8") as handle:
+            json.dump({"entries": entries}, handle, ensure_ascii=False, indent=1)
+        os.replace(temp, SCORES_PATH)
+
+    return entries
+
 
 class GameHandler(http.server.SimpleHTTPRequestHandler):
     """캐시를 끄고, 실패한 요청만 로그로 남기는 정적 핸들러."""
+
+    # 기본값인 HTTP/1.0 은 리소스마다 TCP 연결을 새로 맺는다.
+    # 스프라이트시트가 30개가 넘어서 첫 로딩이 눈에 띄게 느려지므로 keep-alive 를 켠다.
+    protocol_version = "HTTP/1.1"
 
     extensions_map = {
         **http.server.SimpleHTTPRequestHandler.extensions_map,
@@ -46,6 +115,40 @@ class GameHandler(http.server.SimpleHTTPRequestHandler):
         # 에셋을 교체하고 새로고침했을 때 옛 파일이 나오지 않도록 한다.
         self.send_header("Cache-Control", "no-store, max-age=0")
         super().end_headers()
+
+    def do_GET(self) -> None:
+        if self.path.split("?")[0] == SCORES_API:
+            self.send_json({"entries": rank_entries(read_scores())})
+            return
+        super().do_GET()
+
+    def do_POST(self) -> None:
+        if self.path.split("?")[0] != SCORES_API:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+
+        length = clamp_int(self.headers.get("Content-Length"), 0, MAX_BODY_BYTES)
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            self.send_json({"error": "invalid json"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not isinstance(payload, dict):
+            self.send_json({"error": "invalid payload"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        entries = add_score(payload)
+        print("  [기록] %s  %s" % (clean_name(payload.get("name")), payload.get("score", 0)))
+        self.send_json({"entries": entries})
+
+    def send_json(self, payload, status=HTTPStatus.OK) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_request(self, code="-", size="-") -> None:
         if isinstance(code, HTTPStatus):

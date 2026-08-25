@@ -8,7 +8,12 @@ const tintCtx = tintBuffer.getContext("2d");
 class SpriteSheet {
   /**
    * @param {HTMLImageElement} image  프레임이 가로로 이어붙은 시트
+   * @param {number} frameWidth   논리 프레임 폭 (게임 좌표 기준)
+   * @param {number} frameHeight  논리 프레임 높이
    * @param {number} anchorX  프레임 안에서 캐릭터의 좌우 중심 x
+   *
+   * 시트 PNG 는 용량을 줄이려고 논리 크기보다 작게 구워져 있을 수 있다.
+   * 그리는 크기는 항상 논리 크기 기준이므로, 작은 시트는 그대로 확대되어 도트가 굵어진다.
    */
   constructor(image, frameWidth, frameHeight, frameCount, anchorX) {
     this.image = image;
@@ -16,16 +21,22 @@ class SpriteSheet {
     this.frameHeight = frameHeight;
     this.frameCount = frameCount;
     this.anchorX = anchorX;
+
+    this.sourceWidth = image.width / frameCount; // 시트 안에서 한 프레임이 차지하는 실제 픽셀
+    this.sourceHeight = image.height;
   }
 
   /**
    * 발끝(footX, footY)을 기준으로 한 프레임을 그린다.
    * @param {boolean} flip  true 면 좌우 반전 (왼쪽을 보는 상태)
-   * @param {string|null} tint  피격 플래시 색. null 이면 원본 그대로.
+   * @param {object} options
+   * @param {string|null} options.tint  피격 플래시 색. null 이면 원본 그대로.
+   * @param {number} options.alpha
+   * @param {number} options.hue  색조 회전(도). 전용 스프라이트가 없는 2P 폴백용.
    */
-  draw(ctx, frame, footX, footY, scale, flip, tint = null, alpha = 1) {
+  draw(ctx, frame, footX, footY, scale, flip, { tint = null, alpha = 1, hue = 0 } = {}) {
     const index = Math.min(Math.max(frame | 0, 0), this.frameCount - 1);
-    const sx = index * this.frameWidth;
+    const sx = index * this.sourceWidth;
     const width = this.frameWidth * scale;
     const height = this.frameHeight * scale;
     const offsetX = -this.anchorX * scale;
@@ -35,11 +46,11 @@ class SpriteSheet {
     ctx.translate(footX, footY);
     if (flip) ctx.scale(-1, 1);
 
-    if (tint) {
-      this.#drawTinted(ctx, sx, offsetX, -height, width, height, tint);
+    if (tint || hue) {
+      this.#drawProcessed(ctx, sx, offsetX, -height, width, height, tint, hue);
     } else {
       ctx.drawImage(
-        this.image, sx, 0, this.frameWidth, this.frameHeight,
+        this.image, sx, 0, this.sourceWidth, this.sourceHeight,
         offsetX, -height, width, height
       );
     }
@@ -47,18 +58,26 @@ class SpriteSheet {
     ctx.restore();
   }
 
-  #drawTinted(ctx, sx, dx, dy, width, height, tint) {
-    tintBuffer.width = this.frameWidth;
-    tintBuffer.height = this.frameHeight;
-    tintCtx.clearRect(0, 0, this.frameWidth, this.frameHeight);
-    tintCtx.drawImage(
-      this.image, sx, 0, this.frameWidth, this.frameHeight,
-      0, 0, this.frameWidth, this.frameHeight
-    );
-    tintCtx.globalCompositeOperation = "source-atop";
-    tintCtx.fillStyle = tint;
-    tintCtx.fillRect(0, 0, this.frameWidth, this.frameHeight);
-    tintCtx.globalCompositeOperation = "source-over";
+  /** 색조 회전과 플래시 틴트는 오프스크린에서 처리해야 아래 픽셀이 물들지 않는다. */
+  #drawProcessed(ctx, sx, dx, dy, width, height, tint, hue) {
+    const { sourceWidth, sourceHeight } = this;
+
+    tintBuffer.width = sourceWidth;
+    tintBuffer.height = sourceHeight;
+    tintCtx.clearRect(0, 0, sourceWidth, sourceHeight);
+    tintCtx.imageSmoothingEnabled = false;
+
+    tintCtx.filter = hue ? `hue-rotate(${hue}deg) saturate(1.3)` : "none";
+    tintCtx.drawImage(this.image, sx, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+    tintCtx.filter = "none";
+
+    if (tint) {
+      tintCtx.globalCompositeOperation = "source-atop";
+      tintCtx.fillStyle = tint;
+      tintCtx.fillRect(0, 0, sourceWidth, sourceHeight);
+      tintCtx.globalCompositeOperation = "source-over";
+    }
+
     ctx.drawImage(tintBuffer, dx, dy, width, height);
   }
 }
@@ -113,16 +132,16 @@ class Animator {
     }
   }
 
-  draw(ctx, footX, footY, scale, flip, tint, alpha) {
-    this.sheet?.draw(ctx, this.frame, footX, footY, scale, flip, tint, alpha);
+  draw(ctx, footX, footY, scale, flip, options) {
+    this.sheet?.draw(ctx, this.frame, footX, footY, scale, flip, options);
   }
 }
 
-/** 캐릭터를 바닥에 붙여 보이게 하는 타원 그림자. */
-function drawShadow(ctx, footX, footY, radius, alpha = 0.32) {
+/** 캐릭터를 바닥에 붙여 보이게 하는 타원 그림자. 색으로 1P/2P 를 구분한다. */
+function drawShadow(ctx, footX, footY, radius, color = "#000", alpha = 0.32) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.ellipse(footX, footY, radius, radius * 0.3, 0, 0, Math.PI * 2);
   ctx.fill();

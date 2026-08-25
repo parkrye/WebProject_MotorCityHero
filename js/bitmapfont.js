@@ -71,6 +71,7 @@ class BitmapFont {
     // width 대입만으로 캔버스가 초기화된다 (합성 모드도 함께 리셋).
     textBuffer.width = Math.ceil(width) + 2;
     textBuffer.height = Math.ceil(size * 1.08);
+    textCtx.imageSmoothingEnabled = false; // 저해상도 시트를 키워도 도트가 살아있게
 
     let cursor = 0;
     for (const char of text) {
@@ -90,6 +91,7 @@ class BitmapFont {
   #shadowOf() {
     shadowBuffer.width = textBuffer.width;
     shadowBuffer.height = textBuffer.height;
+    shadowCtx.imageSmoothingEnabled = false;
     shadowCtx.drawImage(textBuffer, 0, 0);
     shadowCtx.globalCompositeOperation = "source-atop";
     shadowCtx.fillStyle = "rgba(0, 0, 0, 0.85)";

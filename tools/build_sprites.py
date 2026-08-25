@@ -8,16 +8,19 @@ canvas 의 drawImage 는 애니메이션 GIF 의 프레임을 제어할 수 없�
 
 원본 폴더 구조:
     player_idle.gif / player_walk.gif / player_attack.gif / player_hit.gif
+    player2/player2_idle.gif ... (선택. 없으면 2P 는 1P 스프라이트를 색조만 바꿔 쓴다)
     game_bg.png
     enemy/enemy_1.gif ... enemy_6.gif
 
 산출물 (assets/):
-    player_*.png, enemy_N_move.png, game_bg.png
+    player_*.png, player2_*.png, enemy_N_move.png, game_bg.png
     sprites.json  - 참고용
     sprites.js    - window.SPRITE_MANIFEST. file:// 에서 fetch 가 막히므로 이쪽을 로드한다.
 """
 
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,13 +35,49 @@ ENEMY_COUNT = 6
 ICONS = ("heartIcon", "coin", "healItem")
 ICON_HEIGHT = 128
 
+# ── 용량 최적화 ────────────────────────────────────────────────────────────
+# 시트 PNG 를 논리 크기보다 작게 굽고 게임에서 확대해 그린다.
+# 도트가 굵어져 오히려 레트로해지고 용량은 배율의 제곱만큼 줄어든다.
+# 크기 정보는 매니페스트에 원본(논리) 기준으로 남으므로 게임 좌표는 그대로다.
+SPRITE_SCALE = 0.5
+SPRITE_COLORS = 64   # 팔레트 색 수. 줄일수록 작아지고 색 띠가 두드러진다
+ICON_COLORS = 48
+BG_SIZE = (512, 384) # 배경은 캔버스(1024x768)의 절반으로 굽는다
+BG_COLORS = 64
+FONT_COLORS = 32     # 글자에 그라데이션이 있어 너무 줄이면 뭉개진다
+
+# 오디오는 모노 · 저샘플레이트로 다시 인코딩한다. 원본은 48kHz 스테레오라 과하다.
+AUDIO_SAMPLE_RATE = 22050
+BGM_BITRATE = "48k"
+SFX_BITRATE = "64k"
+
 # 글리프는 6x6 으로 배치되어 있고 알파가 비어있는 구간으로 칸을 찾는다.
 FONT_ORDER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 FONT_ROWS = 6
 FONT_COLUMNS = 6
-FONT_HEIGHT = 128  # 가장 큰 글리프를 이 높이로 맞춘다
+FONT_HEIGHT = 64   # 가장 큰 글리프를 이 높이로 맞춘다 (게임에서 확대해 그린다)
 FONT_PADDING = 2   # 스트립에서 옆 글리프가 번지지 않도록
 ALPHA_THRESHOLD = 16
+
+
+def shrink(image, scale):
+    """LANCZOS 로 곱게 줄인다. 게임에서 다시 확대할 때 pixelated 로 그려 도트가 살아난다."""
+    if scale >= 1:
+        return image
+    size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+    return image.resize(size, Image.LANCZOS)
+
+
+def save_quantized(image, path, colors):
+    """팔레트 PNG 로 저장한다. 투명도가 있으면 팔레트에 알파를 포함하는 방식을 쓴다."""
+    if image.mode == "RGBA":
+        # MEDIANCUT 은 알파를 다루지 못한다. FASTOCTREE 만 RGBA 를 받는다.
+        image = image.quantize(colors=colors, method=Image.FASTOCTREE)
+    else:
+        image = image.convert("RGB").quantize(colors=colors, method=Image.MEDIANCUT)
+
+    image.save(path, optimize=True)
+    return path.stat().st_size
 
 
 def load_frames(path):
@@ -75,18 +114,113 @@ def bake(name, frame_groups, out_dir):
         sheet = Image.new("RGBA", (width * len(frames), FRAME_H))
         for i, frame in enumerate(frames):
             sheet.paste(frame.crop((x0, 0, x1, FRAME_H)), (i * width, 0))
+
+        # 프레임 경계가 어긋나지 않도록 프레임 폭이 정수가 되게 맞춰 줄인다.
+        small_frame_w = max(1, round(width * SPRITE_SCALE))
+        small = sheet.resize(
+            (small_frame_w * len(frames), max(1, round(FRAME_H * SPRITE_SCALE))), Image.LANCZOS
+        )
+
         out = out_dir / (name + "_" + anim + ".png")
-        sheet.save(out, optimize=True)
+        size = save_quantized(small, out, SPRITE_COLORS)
         anims[anim] = {"file": out.name, "frames": len(frames)}
-        print("  %s  %dx%d  (%df)" % (out.name, sheet.width, sheet.height, len(frames)))
+        print("  %s  %dx%d  (%df, %dKB)" % (out.name, small.width, small.height, len(frames), size // 1024))
 
     return {
+        # 크기는 원본 기준으로 남긴다. 게임은 이 크기로 그리고 시트만 확대된다.
         "frameWidth": width,
         "frameHeight": FRAME_H,
         # 캐릭터 좌우 중심이 크롭 후 프레임 안에서 어디인지 (원본 256 기준 중앙)
         "anchorX": (FRAME_H / 2) - x0,
         "anims": anims,
     }
+
+
+AUDIO_EXTS = (".wav", ".mp3", ".ogg", ".flac", ".m4a")
+AUDIO_DIRS = ("sfx", "bgm")
+
+# 게임이 부르는 이름으로 맞춰준다. 원본 파일명이 뭐든 여기서 정리한다.
+AUDIO_RENAME = {
+    "bgm": {"main": "game", "game_over": "gameover", "stage": "game", "title": "lobby"},
+    "sfx": {},
+}
+
+
+def encode_audio(source, target, bitrate):
+    """모노 · 저샘플레이트 mp3 로 다시 굽는다. ffmpeg 이 없으면 원본을 그대로 복사한다."""
+    if shutil.which("ffmpeg") is None:
+        fallback = target.with_suffix(source.suffix.lower())
+        shutil.copyfile(source, fallback)
+        print("    %s  (ffmpeg 이 없어 원본 그대로)" % fallback.name)
+        return fallback
+
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+         "-ac", "1", "-ar", str(AUDIO_SAMPLE_RATE), "-b:a", bitrate,
+         "-map_metadata", "-1", str(target)],
+        check=True,
+    )
+    before = source.stat().st_size // 1024
+    after = target.stat().st_size // 1024
+    print("    %-16s %5dKB -> %4dKB" % (target.name, before, after))
+    return target
+
+
+def normalize_stem(stem):
+    """'game over' -> 'game_over'. 공백이 든 파일명은 URL 에서 성가시다."""
+    return "_".join(stem.lower().split())
+
+
+def camel(stem):
+    """enemy_die -> enemyDie. JS 쪽에서 그대로 쓰기 편한 키로 바꾼다."""
+    head, *rest = stem.split("_")
+    return head + "".join(part.capitalize() for part in rest)
+
+
+def collect_audio(src, out_dir):
+    """원본 폴더의 sfx/bgm 을 assets 로 복사하고, 최종적으로 있는 파일만 매니페스트에 담는다.
+
+    없는 파일을 게임이 요청하면 404 가 나므로 실제로 존재하는 것만 목록에 넣는다.
+    BGM 은 나중에 assets/bgm 에 직접 넣고 이 스크립트를 다시 돌리면 잡힌다.
+    """
+    manifest = {}
+    for kind in AUDIO_DIRS:
+        target = out_dir / kind
+        target.mkdir(exist_ok=True)
+
+        source = src / kind
+        if source.is_dir():
+            # 이름 규칙이 바뀌면 옛 파일이 남아 중복되므로 먼저 비운다.
+            for old in target.iterdir():
+                if old.suffix.lower() in AUDIO_EXTS:
+                    old.unlink()
+
+            bitrate = BGM_BITRATE if kind == "bgm" else SFX_BITRATE
+            for path in sorted(source.iterdir()):
+                if path.suffix.lower() not in AUDIO_EXTS:
+                    continue
+                stem = normalize_stem(path.stem)
+                stem = AUDIO_RENAME[kind].get(stem, stem)
+                encode_audio(path, target / (stem + ".mp3"), bitrate)
+
+        found = {camel(p.stem): kind + "/" + p.name
+                 for p in sorted(target.iterdir()) if p.suffix.lower() in AUDIO_EXTS}
+        manifest[kind] = found
+        print("  %s: %s" % (kind, ", ".join(found) if found else "(없음)"))
+
+    return manifest
+
+
+def find_player_gifs(src, name):
+    """<src>/<name>/ 를 먼저 보고, 없으면 <src> 바로 아래에서 찾는다.
+
+    2P 원본은 보통 폴더째 받으므로 두 배치를 모두 받아준다.
+    """
+    for base in (src / name, src):
+        paths = {a: base / (name + "_" + a + ".gif") for a in PLAYER_ANIMS}
+        if all(p.exists() for p in paths.values()):
+            return paths
+    return None
 
 
 def bake_icon(path, out_dir):
@@ -98,9 +232,10 @@ def bake_icon(path, out_dir):
     scale = ICON_HEIGHT / icon.height
     icon = icon.resize((max(1, round(icon.width * scale)), ICON_HEIGHT), Image.LANCZOS)
 
+    # 아이콘 크기는 픽업 히트박스 계산에 쓰이므로 줄이지 않고 색만 줄인다.
     out = out_dir / path.name
-    icon.save(out, optimize=True)
-    print("  %s  %dx%d" % (out.name, icon.width, icon.height))
+    size = save_quantized(icon, out, ICON_COLORS)
+    print("  %s  %dx%d  (%dKB)" % (out.name, icon.width, icon.height, size // 1024))
     return {"file": out.name, "width": icon.width, "height": icon.height}
 
 
@@ -173,8 +308,8 @@ def bake_font(path, out_dir):
         x += image.width + FONT_PADDING
 
     out = out_dir / "font.png"
-    strip.save(out, optimize=True)
-    print("  %s  %dx%d  (%d glyphs)" % (out.name, strip.width, strip.height, len(metrics)))
+    size = save_quantized(strip, out, FONT_COLORS)
+    print("  %s  %dx%d  (%d glyphs, %dKB)" % (out.name, strip.width, strip.height, len(metrics), size // 1024))
 
     return {"file": out.name, "refHeight": FONT_HEIGHT, "glyphs": metrics}
 
@@ -190,8 +325,18 @@ def main():
     manifest = {"player": None, "enemies": {}, "background": "game_bg.png"}
 
     print("player:")
-    player_anims = {a: load_frames(src / ("player_" + a + ".gif")) for a in PLAYER_ANIMS}
-    manifest["player"] = bake("player", player_anims, out_dir)
+    paths = find_player_gifs(src, "player")
+    if paths is None:
+        sys.exit("player_*.gif 를 찾지 못했습니다: " + str(src))
+    manifest["player"] = bake("player", {a: load_frames(p) for a, p in paths.items()}, out_dir)
+
+    # 2P 는 선택 사항. 없으면 게임이 1P 시트를 색조만 바꿔서 쓴다.
+    print("player2:")
+    paths = find_player_gifs(src, "player2")
+    if paths is None:
+        print("  skip (player2_*.gif 없음. 2P 는 색조 폴백으로 그려진다)")
+    else:
+        manifest["player2"] = bake("player2", {a: load_frames(p) for a, p in paths.items()}, out_dir)
 
     print("enemies:")
     for i in range(1, ENEMY_COUNT + 1):
@@ -201,10 +346,11 @@ def main():
             continue
         manifest["enemies"][str(i)] = bake("enemy_%d" % i, {"move": load_frames(gif)}, out_dir)
 
-    bg = Image.open(src / "game_bg.png").convert("RGB")
-    bg.save(out_dir / "game_bg.png", optimize=True)
+    # 배경은 캔버스 크기로 늘려 그려지므로 원본 해상도가 필요 없다.
+    bg = Image.open(src / "game_bg.png").convert("RGB").resize(BG_SIZE, Image.LANCZOS)
+    size = save_quantized(bg, out_dir / "game_bg.png", BG_COLORS)
     manifest["backgroundSize"] = [bg.width, bg.height]
-    print("background: game_bg.png  %dx%d" % (bg.width, bg.height))
+    print("background: game_bg.png  %dx%d  (%dKB)" % (bg.width, bg.height, size // 1024))
 
     sprites = src / "sprites"
     if sprites.is_dir():
@@ -212,6 +358,9 @@ def main():
         manifest["icons"] = {name: bake_icon(sprites / (name + ".png"), out_dir) for name in ICONS}
         print("font:")
         manifest["font"] = bake_font(sprites / "font.png", out_dir)
+
+    print("audio:")
+    manifest["audio"] = collect_audio(src, out_dir)
 
     body = json.dumps(manifest, indent=2)
     (out_dir / "sprites.json").write_text(body, encoding="utf-8")

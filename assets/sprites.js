@@ -92,9 +92,32 @@ window.SPRITE_MANIFEST = {
     }
   },
   "background": "game_bg.png",
+  "player2": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "anchorX": 128.0,
+    "anims": {
+      "idle": {
+        "file": "player2_idle.png",
+        "frames": 8
+      },
+      "walk": {
+        "file": "player2_walk.png",
+        "frames": 8
+      },
+      "attack": {
+        "file": "player2_attack.png",
+        "frames": 8
+      },
+      "hit": {
+        "file": "player2_hit.png",
+        "frames": 8
+      }
+    }
+  },
   "backgroundSize": [
-    1448,
-    1086
+    512,
+    384
   ],
   "icons": {
     "heartIcon": {
@@ -115,188 +138,206 @@ window.SPRITE_MANIFEST = {
   },
   "font": {
     "file": "font.png",
-    "refHeight": 128,
+    "refHeight": 64,
     "glyphs": {
       "A": {
         "x": 0,
-        "width": 128,
-        "height": 124
+        "width": 64,
+        "height": 62
       },
       "B": {
-        "x": 130,
-        "width": 113,
-        "height": 124
+        "x": 66,
+        "width": 57,
+        "height": 62
       },
       "C": {
-        "x": 245,
-        "width": 115,
-        "height": 124
+        "x": 125,
+        "width": 58,
+        "height": 62
       },
       "D": {
-        "x": 362,
-        "width": 119,
-        "height": 124
+        "x": 185,
+        "width": 60,
+        "height": 62
       },
       "E": {
-        "x": 483,
-        "width": 111,
-        "height": 124
+        "x": 247,
+        "width": 56,
+        "height": 62
       },
       "F": {
-        "x": 596,
-        "width": 118,
-        "height": 124
+        "x": 305,
+        "width": 59,
+        "height": 62
       },
       "G": {
-        "x": 716,
-        "width": 121,
-        "height": 123
+        "x": 366,
+        "width": 61,
+        "height": 61
       },
       "H": {
-        "x": 839,
-        "width": 121,
-        "height": 123
+        "x": 429,
+        "width": 60,
+        "height": 61
       },
       "I": {
-        "x": 962,
-        "width": 87,
-        "height": 123
+        "x": 491,
+        "width": 43,
+        "height": 61
       },
       "J": {
-        "x": 1051,
-        "width": 120,
-        "height": 123
+        "x": 536,
+        "width": 60,
+        "height": 61
       },
       "K": {
-        "x": 1173,
-        "width": 125,
-        "height": 123
+        "x": 598,
+        "width": 63,
+        "height": 61
       },
       "L": {
-        "x": 1300,
-        "width": 116,
-        "height": 123
+        "x": 663,
+        "width": 58,
+        "height": 61
       },
       "M": {
-        "x": 1418,
-        "width": 128,
-        "height": 124
+        "x": 723,
+        "width": 64,
+        "height": 62
       },
       "N": {
-        "x": 1548,
-        "width": 119,
-        "height": 124
+        "x": 789,
+        "width": 60,
+        "height": 62
       },
       "O": {
-        "x": 1669,
-        "width": 118,
-        "height": 124
+        "x": 851,
+        "width": 59,
+        "height": 62
       },
       "P": {
-        "x": 1789,
-        "width": 117,
-        "height": 124
+        "x": 912,
+        "width": 58,
+        "height": 62
       },
       "Q": {
-        "x": 1908,
-        "width": 128,
-        "height": 128
+        "x": 972,
+        "width": 64,
+        "height": 64
       },
       "R": {
-        "x": 2038,
-        "width": 119,
-        "height": 124
+        "x": 1038,
+        "width": 60,
+        "height": 62
       },
       "S": {
-        "x": 2159,
-        "width": 115,
-        "height": 123
+        "x": 1100,
+        "width": 57,
+        "height": 61
       },
       "T": {
-        "x": 2276,
-        "width": 118,
-        "height": 123
+        "x": 1159,
+        "width": 59,
+        "height": 61
       },
       "U": {
-        "x": 2396,
-        "width": 118,
-        "height": 123
+        "x": 1220,
+        "width": 59,
+        "height": 61
       },
       "V": {
-        "x": 2516,
-        "width": 123,
-        "height": 123
+        "x": 1281,
+        "width": 61,
+        "height": 61
       },
       "W": {
-        "x": 2641,
-        "width": 135,
-        "height": 123
+        "x": 1344,
+        "width": 68,
+        "height": 61
       },
       "X": {
-        "x": 2778,
-        "width": 119,
-        "height": 123
+        "x": 1414,
+        "width": 60,
+        "height": 61
       },
       "Y": {
-        "x": 2899,
-        "width": 124,
-        "height": 124
+        "x": 1476,
+        "width": 62,
+        "height": 62
       },
       "Z": {
-        "x": 3025,
-        "width": 118,
-        "height": 124
+        "x": 1540,
+        "width": 59,
+        "height": 62
       },
       "0": {
-        "x": 3145,
-        "width": 116,
-        "height": 124
+        "x": 1601,
+        "width": 58,
+        "height": 62
       },
       "1": {
-        "x": 3263,
-        "width": 92,
-        "height": 124
+        "x": 1661,
+        "width": 46,
+        "height": 62
       },
       "2": {
-        "x": 3357,
-        "width": 113,
-        "height": 124
+        "x": 1709,
+        "width": 57,
+        "height": 62
       },
       "3": {
-        "x": 3472,
-        "width": 118,
-        "height": 124
+        "x": 1768,
+        "width": 59,
+        "height": 62
       },
       "4": {
-        "x": 3592,
-        "width": 126,
-        "height": 121
+        "x": 1829,
+        "width": 63,
+        "height": 60
       },
       "5": {
-        "x": 3720,
-        "width": 118,
-        "height": 121
+        "x": 1894,
+        "width": 59,
+        "height": 60
       },
       "6": {
-        "x": 3840,
-        "width": 115,
-        "height": 121
+        "x": 1955,
+        "width": 58,
+        "height": 60
       },
       "7": {
-        "x": 3957,
-        "width": 120,
-        "height": 121
+        "x": 2015,
+        "width": 60,
+        "height": 60
       },
       "8": {
-        "x": 4079,
-        "width": 122,
-        "height": 121
+        "x": 2077,
+        "width": 61,
+        "height": 60
       },
       "9": {
-        "x": 4203,
-        "width": 118,
-        "height": 121
+        "x": 2140,
+        "width": 59,
+        "height": 60
       }
+    }
+  },
+  "audio": {
+    "sfx": {
+      "attack": "sfx/attack.mp3",
+      "button": "sfx/button.mp3",
+      "coin": "sfx/coin.mp3",
+      "countdown": "sfx/countdown.mp3",
+      "enemyDie": "sfx/enemy_die.mp3",
+      "heal": "sfx/heal.mp3",
+      "hit": "sfx/hit.mp3"
+    },
+    "bgm": {
+      "countdown": "bgm/countdown.mp3",
+      "game": "bgm/game.mp3",
+      "gameover": "bgm/gameover.mp3",
+      "lobby": "bgm/lobby.mp3",
+      "ranking": "bgm/ranking.mp3"
     }
   }
 };

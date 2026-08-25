@@ -1,42 +1,42 @@
-// 점수에 따라 레벨을 해금하고 에너미를 화면 밖에서 밀어 넣는다.
+// 점수에 따라 스테이지를 해금하고 에너미를 화면 밖에서 밀어 넣는다.
 
 class Spawner {
-  /** @param {Map<number, object>} enemyAnims  레벨 -> 애니메이션 세트 */
+  /** @param {Map<number, object>} enemyAnims  스테이지 -> 애니메이션 세트 */
   constructor(enemyAnims) {
     this.enemyAnims = enemyAnims;
-    this.maxLevel = Math.min(CONFIG.enemyLevels.length, enemyAnims.size);
+    this.maxStage = Math.min(CONFIG.enemyStages.length, enemyAnims.size);
     this.reset();
   }
 
   reset() {
-    this.level = 1;
+    this.stage = 1;
     this.timer = CONFIG.spawn.firstDelay / 1000;
   }
 
-  /** 누적 점수로 해금된 최고 레벨. */
-  levelForScore(score) {
-    let level = 1;
-    CONFIG.levelThresholds.forEach((threshold, index) => {
-      if (score >= threshold) level = index + 1;
+  /** 누적 점수로 해금된 최고 스테이지. */
+  stageForScore(score) {
+    let stage = 1;
+    CONFIG.stageThresholds.forEach((threshold, index) => {
+      if (score >= threshold) stage = index + 1;
     });
-    return Math.min(level, this.maxLevel);
+    return Math.min(stage, this.maxStage);
   }
 
   get maxAlive() {
-    const { maxAliveBase, maxAlivePerLevel, maxAliveCap } = CONFIG.spawn;
-    return Math.min(maxAliveCap, Math.floor(maxAliveBase + (this.level - 1) * maxAlivePerLevel));
+    const { maxAliveBase, maxAlivePerStage, maxAliveCap } = CONFIG.spawn;
+    return Math.min(maxAliveCap, Math.floor(maxAliveBase + (this.stage - 1) * maxAlivePerStage));
   }
 
   get interval() {
-    const { intervalBase, intervalPerLevel, intervalMin } = CONFIG.spawn;
-    return Math.max(intervalMin, intervalBase + (this.level - 1) * intervalPerLevel) / 1000;
+    const { intervalBase, intervalPerStage, intervalMin } = CONFIG.spawn;
+    return Math.max(intervalMin, intervalBase + (this.stage - 1) * intervalPerStage) / 1000;
   }
 
   /**
    * @returns {Enemy|null} 이번 프레임에 새로 등장한 에너미
    */
   update(dt, { score, cameraX, aliveCount }) {
-    this.level = this.levelForScore(score);
+    this.stage = this.stageForScore(score);
 
     this.timer -= dt;
     if (this.timer > 0) return null;
@@ -48,11 +48,11 @@ class Spawner {
   }
 
   #spawn(cameraX) {
-    const level = this.#pickLevel();
-    const anims = this.enemyAnims.get(level);
+    const stage = this.#pickStage();
+    const anims = this.enemyAnims.get(stage);
     if (!anims) return null;
 
-    const stats = CONFIG.enemyLevels[level - 1];
+    const stats = CONFIG.enemyStages[stage - 1];
     const { marginX, fromLeftChance } = CONFIG.spawn;
 
     const leftX = cameraX - marginX;
@@ -69,9 +69,9 @@ class Spawner {
     return enemy;
   }
 
-  /** 현재 레벨 위주로, 가끔 한 단계 아래도 섞어 뽑는다. */
-  #pickLevel() {
-    if (this.level === 1 || Math.random() < 0.65) return this.level;
-    return this.level - 1;
+  /** 현재 스테이지 위주로, 가끔 한 단계 아래도 섞어 뽑는다. */
+  #pickStage() {
+    if (this.stage === 1 || Math.random() < 0.65) return this.stage;
+    return this.stage - 1;
   }
 }

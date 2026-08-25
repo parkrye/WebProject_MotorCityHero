@@ -35,5 +35,8 @@ body {
   display: block;
   background: #05070c;
   box-shadow: 0 0 0 2px #1b2233, 0 18px 60px rgba(0, 0, 0, 0.75);
-  image-rendering: auto;
+
+  /* 에셋을 저해상도로 굽고 확대해서 그린다. 보간하면 흐려지므로 픽셀을 그대로 키운다. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }

@@ -37,37 +37,61 @@ class Enemy extends Actor {
     return this.state === ENEMY_STATE.DYING;
   }
 
-  /** 이번 프레임에 플레이어를 때렸다면 true. 게임 루프가 데미지를 적용한다. */
-  update(dt, player) {
+  /**
+   * @param {Player[]} players  노릴 수 있는 플레이어들
+   * @returns {Player|null} 이번 프레임에 때린 플레이어. 게임 루프가 데미지를 적용한다.
+   */
+  update(dt, players) {
     this.updateCommon(dt);
 
     if (this.isDying) {
       this.deathTimer -= dt;
       if (this.deathTimer <= 0) this.dead = true;
-      return false;
+      return null;
     }
 
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
-      return false;
+      return null;
     }
+
+    const target = this.#pickTarget(players);
+    if (!target) return null;
 
     this.timer -= dt;
 
-    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup(player);
-    if (this.state === ENEMY_STATE.COOLDOWN && this.timer > 0) return false;
+    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup(target);
+    if (this.state === ENEMY_STATE.COOLDOWN && this.timer > 0) return null;
 
     this.state = ENEMY_STATE.APPROACH;
-    this.#approach(dt, player);
-    return false;
+    this.#approach(dt, target);
+    return null;
+  }
+
+  /** 가장 가까운 플레이어를 노린다. 쓰러진 쪽은 쳐다보지 않는다. */
+  #pickTarget(players) {
+    let best = null;
+    let bestDistance = Infinity;
+
+    for (const player of players) {
+      if (player.downed) continue;
+
+      // 깊이 차이는 좁히기 더 어려우므로 가중치를 준다.
+      const distance = Math.hypot(player.x - this.x, (player.y - this.y) * 1.6);
+      if (distance >= bestDistance) continue;
+
+      best = player;
+      bestDistance = distance;
+    }
+    return best;
   }
 
   #updateWindup(player) {
-    if (this.timer > 0) return false;
+    if (this.timer > 0) return null;
 
     this.state = ENEMY_STATE.COOLDOWN;
     this.timer = this.stats.attackCooldown / 1000;
-    return this.#inAttackRange(player);
+    return this.#inAttackRange(player) ? player : null;
   }
 
   #approach(dt, player) {
@@ -120,7 +144,7 @@ class Enemy extends Actor {
       // 준비 동작은 살짝 뒤로 젖히는 느낌으로 예고한다.
       const lean = this.state === ENEMY_STATE.WINDUP ? -6 * scale * this.facing : 0;
       drawShadow(ctx, screenX, this.y, this.bodyWidth * scale * 1.1);
-      this.animator.draw(ctx, screenX + lean, this.y, scale, this.isFlipped, this.tint, 1);
+      this.animator.draw(ctx, screenX + lean, this.y, scale, this.isFlipped, { tint: this.tint });
       this.#drawHealthBar(ctx, screenX, scale);
       return;
     }
@@ -129,7 +153,10 @@ class Enemy extends Actor {
     ctx.save();
     ctx.translate(screenX, this.y - t * 26);
     ctx.rotate(this.facing * t * 0.5);
-    this.animator.draw(ctx, 0, 0, scale, this.isFlipped, "rgba(90, 20, 20, 0.55)", 1 - t);
+    this.animator.draw(ctx, 0, 0, scale, this.isFlipped, {
+      tint: "rgba(90, 20, 20, 0.55)",
+      alpha: 1 - t,
+    });
     ctx.restore();
   }
 
