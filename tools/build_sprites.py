@@ -6,14 +6,23 @@ canvas 의 drawImage 는 애니메이션 GIF 의 프레임을 제어할 수 없�
 사용법:
     python tools/build_sprites.py <원본_에셋_폴더>
 
-원본 폴더 구조:
+원본 폴더는 통째로 줘도 되고 일부만 줘도 된다. assets/sprites.json 이 이미 있으면
+그 위에 이번에 찾은 것만 덮어쓰므로 에셋을 하나씩 추가할 수 있다.
+
+원본 폴더 구조 (전부 선택):
     player_idle.gif / player_walk.gif / player_attack.gif / player_hit.gif
-    player2/player2_idle.gif ... (선택. 없으면 2P 는 1P 스프라이트를 색조만 바꿔 쓴다)
-    game_bg.png
-    enemy/enemy_1.gif ... enemy_6.gif
+    player_kick.gif / player_clear.gif   없으면 게임이 attack / idle 로 대체한다
+    player2/player2_idle.gif ...         (선택)
+    game_bg.png                          스테이지 2(디트로이트) 배경
+    bg_stage1.png ... bg_stage6.png      스테이지별 배경. 없는 번호는 game_bg 로 남는다
+    illust_clear.png                     스테이지 클리어 연출 일러스트
+    buff_frames.png                      가로 8프레임 x 세로 3종(attack/shield/speed) 격자
+    enemy/enemy_1.gif ... enemy_7.gif
+    sprites/heartIcon.png coin.png ... powerup_attack.png powerup_shield.png powerup_speed.png
+    sfx/*.*  bgm/*.*
 
 산출물 (assets/):
-    player_*.png, player2_*.png, enemy_N_move.png, game_bg.png
+    player_*.png, enemy_N_move.png, game_bg.png, bg_stageN.png, buff_*.png
     sprites.json  - 참고용
     sprites.js    - window.SPRITE_MANIFEST. file:// 에서 fetch 가 막히므로 이쪽을 로드한다.
 """
@@ -31,10 +40,21 @@ FRAME_H = 256  # 세로는 원본 그대로 유지해야 모든 캐릭터의 발
 PAD_X = 4      # 좌우 크롭 여유
 
 PLAYER_ANIMS = ("idle", "walk", "attack", "hit")
-ENEMY_COUNT = 6
+# 원본이 아직 없으면 게임이 attack / idle 로 대체하므로 없어도 굽기는 성공한다.
+PLAYER_OPTIONAL_ANIMS = ("kick", "clear")
+ENEMY_COUNT = 7
+STAGE_COUNT = 6
 
-ICONS = ("heartIcon", "coin", "healItem", "speaker", "screen")
+ICONS = ("heartIcon", "coin", "healItem", "speaker", "screen",
+         "powerup_attack", "powerup_shield", "powerup_speed")
 ICON_HEIGHT = 128
+
+# buff_frames.png 는 가로 8프레임 x 세로 3종 격자다. 위에서부터 attack, shield, speed.
+BUFF_SHEET = "buff_frames.png"
+BUFF_KINDS = ("attack", "shield", "speed")
+BUFF_FRAMES = 8
+BUFF_SCALE = 0.35  # 캐릭터 뒤에 깔리는 이펙트라 원본 해상도가 필요 없다
+BUFF_COLORS = 48
 
 # ── 용량 최적화 ────────────────────────────────────────────────────────────
 # 시트 PNG 를 논리 크기보다 작게 굽고 게임에서 확대해 그린다.
@@ -105,9 +125,13 @@ def union_x_range(frame_groups):
     return max(0, left - PAD_X), min(FRAME_H, right + PAD_X)
 
 
-def bake(name, frame_groups, out_dir):
-    """한 캐릭터의 애니메이션들을 공통 x 크롭으로 시트화한다."""
-    x0, x1 = union_x_range(list(frame_groups.values()))
+def bake(name, frame_groups, out_dir, x_range=None):
+    """한 캐릭터의 애니메이션들을 공통 x 크롭으로 시트화한다.
+
+    x_range 를 주면 그 범위로 자른다. 이미 구운 시트에 애니메이션만 덧붙일 때
+    크롭이 달라지면 애니메이션이 바뀔 때마다 캐릭터가 좌우로 떨린다.
+    """
+    x0, x1 = x_range or union_x_range(list(frame_groups.values()))
     width = x1 - x0
 
     anims = {}
@@ -135,6 +159,62 @@ def bake(name, frame_groups, out_dir):
         "anchorX": (FRAME_H / 2) - x0,
         "anims": anims,
     }
+
+
+def union_bbox(images):
+    """여러 프레임을 모두 덮는 bbox. 프레임마다 따로 자르면 이펙트가 떨린다."""
+    left = top = right = bottom = None
+    for image in images:
+        box = image.getchannel("A").getbbox()
+        if box is None:
+            continue
+        left = box[0] if left is None else min(left, box[0])
+        top = box[1] if top is None else min(top, box[1])
+        right = box[2] if right is None else max(right, box[2])
+        bottom = box[3] if bottom is None else max(bottom, box[3])
+    if left is None:
+        return (0, 0, images[0].width, images[0].height)
+    return (left, top, right, bottom)
+
+
+def bake_background(path, out_dir, name):
+    """배경·일러스트는 캔버스 크기로 늘려 그려지므로 원본 해상도가 필요 없다."""
+    image = Image.open(path).convert("RGB").resize(BG_SIZE, Image.LANCZOS)
+    size = save_quantized(image, out_dir / name, BG_COLORS)
+    print("  %s  %dx%d  (%dKB)" % (name, image.width, image.height, size // 1024))
+    return name
+
+
+def bake_buff(path, out_dir):
+    """8프레임 x 3종 격자를 종류별 가로 시트로 나눈다."""
+    sheet = Image.open(path).convert("RGBA")
+    cell_w = sheet.width / BUFF_FRAMES
+    cell_h = sheet.height / len(BUFF_KINDS)
+
+    baked = {}
+    for row, kind in enumerate(BUFF_KINDS):
+        top, bottom = round(row * cell_h), round((row + 1) * cell_h)
+        cells = [sheet.crop((round(i * cell_w), top, round((i + 1) * cell_w), bottom))
+                 for i in range(BUFF_FRAMES)]
+
+        box = union_bbox(cells)
+        cells = [cell.crop(box) for cell in cells]
+        frame_w, frame_h = cells[0].size
+
+        strip = Image.new("RGBA", (frame_w * BUFF_FRAMES, frame_h))
+        for i, cell in enumerate(cells):
+            strip.paste(cell, (i * frame_w, 0))
+
+        small_w = max(1, round(frame_w * BUFF_SCALE))
+        small = strip.resize((small_w * BUFF_FRAMES, max(1, round(frame_h * BUFF_SCALE))), Image.LANCZOS)
+
+        out = out_dir / ("buff_" + kind + ".png")
+        size = save_quantized(small, out, BUFF_COLORS)
+        # 크기는 스프라이트와 같은 규칙으로 원본 기준을 남긴다.
+        baked[kind] = {"file": out.name, "frames": BUFF_FRAMES,
+                       "frameWidth": frame_w, "frameHeight": frame_h}
+        print("  %s  %dx%d  (%df, %dKB)" % (out.name, small.width, small.height, BUFF_FRAMES, size // 1024))
+    return baked
 
 
 AUDIO_EXTS = (".wav", ".mp3", ".ogg", ".flac", ".m4a")
@@ -191,17 +271,16 @@ def collect_audio(src, out_dir):
 
         source = src / kind
         if source.is_dir():
-            # 이름 규칙이 바뀌면 옛 파일이 남아 중복되므로 먼저 비운다.
-            for old in target.iterdir():
-                if old.suffix.lower() in AUDIO_EXTS:
-                    old.unlink()
-
             bitrate = BGM_BITRATE if kind == "bgm" else SFX_BITRATE
             for path in sorted(source.iterdir()):
                 if path.suffix.lower() not in AUDIO_EXTS:
                     continue
                 stem = normalize_stem(path.stem)
                 stem = AUDIO_RENAME[kind].get(stem, stem)
+                # 확장자가 다른 같은 곡이 남아 중복되지 않도록 먼저 지운다.
+                for old in target.glob(stem + ".*"):
+                    if old.suffix.lower() in AUDIO_EXTS:
+                        old.unlink()
                 encode_audio(path, target / (stem + ".mp3"), bitrate)
 
         found = {camel(p.stem): kind + "/" + p.name
@@ -269,6 +348,15 @@ def strip_checker_background(icon):
                     seed(nx, ny)
 
     return icon
+
+
+def find_icon(src, name):
+    """<src>/sprites/<name>.png 를 먼저 보고, 없으면 <src> 바로 아래에서 찾는다."""
+    for base in (src / "sprites", src):
+        path = base / (name + ".png")
+        if path.exists():
+            return path
+    return None
 
 
 def bake_icon(path, out_dir):
@@ -370,13 +458,36 @@ def main():
     out_dir = Path(__file__).resolve().parent.parent / "assets"
     out_dir.mkdir(exist_ok=True)
 
-    manifest = {"player": None, "enemies": {}, "background": "game_bg.png"}
+    # 이미 구운 매니페스트가 있으면 그 위에 이번에 찾은 것만 덮어쓴다.
+    # 에셋이 한 번에 다 오지 않으므로 부분 굽기를 기본으로 둔다.
+    manifest_path = out_dir / "sprites.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    if manifest:
+        print("기존 매니페스트 위에 덮어쓴다: %s" % manifest_path.name)
+        print()
+    manifest.setdefault("enemies", {})
+    manifest.setdefault("background", "game_bg.png")
 
     print("player:")
     paths = find_player_gifs(src, "player")
-    if paths is None:
-        sys.exit("player_*.gif 를 찾지 못했습니다: " + str(src))
-    manifest["player"] = bake("player", {a: load_frames(p) for a, p in paths.items()}, out_dir)
+    extra = {a: src / ("player_%s.gif" % a) for a in PLAYER_OPTIONAL_ANIMS}
+    extra = {a: path for a, path in extra.items() if path.exists()}
+
+    if paths is not None:
+        groups = {a: load_frames(path) for a, path in {**paths, **extra}.items()}
+        manifest["player"] = bake("player", groups, out_dir)
+    elif extra and manifest.get("player"):
+        # 시트 전체를 다시 구울 원본이 없으므로 기존 크롭 범위 그대로 애니메이션만 덧붙인다.
+        base = manifest["player"]
+        x0 = round(FRAME_H / 2 - base["anchorX"])
+        groups = {a: load_frames(path) for a, path in extra.items()}
+        added = bake("player", groups, out_dir, (x0, x0 + base["frameWidth"]))
+        base["anims"].update(added["anims"])
+    else:
+        print("  skip (원본 없음)")
+
+    if not manifest.get("player"):
+        sys.exit("player_*.gif 도 기존 매니페스트도 없습니다: " + str(src))
 
     # 2P 는 선택 사항. 없으면 게임이 1P 시트를 색조만 바꿔서 쓴다.
     print("player2:")
@@ -394,30 +505,55 @@ def main():
             continue
         manifest["enemies"][str(i)] = bake("enemy_%d" % i, {"move": load_frames(gif)}, out_dir)
 
-    # 배경은 캔버스 크기로 늘려 그려지므로 원본 해상도가 필요 없다.
-    bg = Image.open(src / "game_bg.png").convert("RGB").resize(BG_SIZE, Image.LANCZOS)
-    size = save_quantized(bg, out_dir / "game_bg.png", BG_COLORS)
-    manifest["backgroundSize"] = [bg.width, bg.height]
-    print("background: game_bg.png  %dx%d  (%dKB)" % (bg.width, bg.height, size // 1024))
+    print("backgrounds:")
+    manifest.setdefault("backgroundSize", list(BG_SIZE))
+    if (src / "game_bg.png").exists():
+        bake_background(src / "game_bg.png", out_dir, "game_bg.png")
 
-    sprites = src / "sprites"
-    if sprites.is_dir():
+    # 스테이지 2(디트로이트)는 원래 배경을 그대로 쓴다. 없는 번호도 같은 폴백을 둔다.
+    stages = manifest.setdefault("stageBackgrounds", {})
+    for i in range(1, STAGE_COUNT + 1):
+        path = src / ("bg_stage%d.png" % i)
+        if path.exists():
+            stages[str(i)] = bake_background(path, out_dir, "bg_stage%d.png" % i)
+        else:
+            stages.setdefault(str(i), manifest["background"])
+
+    illustrations = manifest.setdefault("illustrations", {})
+    for key, filename in (("clear", "illust_clear.png"),):
+        if (src / filename).exists():
+            illustrations[key] = bake_background(src / filename, out_dir, filename)
+
+    if (src / BUFF_SHEET).exists():
+        print("buffs:")
+        manifest["buffs"] = bake_buff(src / BUFF_SHEET, out_dir)
+
+    found = {}
+    for name in ICONS:
+        path = find_icon(src, name)
+        if path is not None:
+            found[name] = path
+    if found:
         print("icons:")
-        manifest["icons"] = {name: bake_icon(sprites / (name + ".png"), out_dir) for name in ICONS}
+        icons = manifest.setdefault("icons", {})
+        icons.update({name: bake_icon(path, out_dir) for name, path in found.items()})
+
+    font = find_icon(src, "font")
+    if font is not None:
         print("font:")
-        manifest["font"] = bake_font(sprites / "font.png", out_dir)
+        manifest["font"] = bake_font(font, out_dir)
 
     print("audio:")
     manifest["audio"] = collect_audio(src, out_dir)
 
     body = json.dumps(manifest, indent=2)
-    (out_dir / "sprites.json").write_text(body, encoding="utf-8")
+    manifest_path.write_text(body, encoding="utf-8")
 
     # file:// 로 열었을 때 fetch 는 CORS 로 막히므로 JS 전역으로도 굽는다
     js = "// build_sprites.py 가 생성한 파일. 직접 수정하지 말 것.\nwindow.SPRITE_MANIFEST = " + body + ";\n"
     (out_dir / "sprites.js").write_text(js, encoding="utf-8")
 
-    print("\n-> " + str(out_dir / "sprites.json"))
+    print("\n-> " + str(manifest_path))
     print("-> " + str(out_dir / "sprites.js"))
 
 

@@ -20,6 +20,10 @@ window.SPRITE_MANIFEST = {
       "hit": {
         "file": "player_hit.png",
         "frames": 8
+      },
+      "kick": {
+        "file": "player_kick.png",
+        "frames": 8
       }
     }
   },
@@ -89,6 +93,17 @@ window.SPRITE_MANIFEST = {
           "frames": 8
         }
       }
+    },
+    "7": {
+      "frameWidth": 143,
+      "frameHeight": 256,
+      "anchorX": 71.0,
+      "anims": {
+        "move": {
+          "file": "enemy_7_move.png",
+          "frames": 8
+        }
+      }
     }
   },
   "background": "game_bg.png",
@@ -143,6 +158,21 @@ window.SPRITE_MANIFEST = {
     "screen": {
       "file": "screen.png",
       "width": 127,
+      "height": 128
+    },
+    "powerup_attack": {
+      "file": "powerup_attack.png",
+      "width": 192,
+      "height": 128
+    },
+    "powerup_shield": {
+      "file": "powerup_shield.png",
+      "width": 143,
+      "height": 128
+    },
+    "powerup_speed": {
+      "file": "powerup_speed.png",
+      "width": 89,
       "height": 128
     }
   },
@@ -343,11 +373,49 @@ window.SPRITE_MANIFEST = {
       "hit": "sfx/hit.mp3"
     },
     "bgm": {
+      "clear": "bgm/clear.mp3",
       "countdown": "bgm/countdown.mp3",
       "game": "bgm/game.mp3",
       "gameover": "bgm/gameover.mp3",
       "lobby": "bgm/lobby.mp3",
-      "ranking": "bgm/ranking.mp3"
+      "ranking": "bgm/ranking.mp3",
+      "stage1": "bgm/stage1.mp3",
+      "stage2": "bgm/stage2.mp3",
+      "stage3": "bgm/stage3.mp3",
+      "stage4": "bgm/stage4.mp3",
+      "stage5": "bgm/stage5.mp3",
+      "stage6": "bgm/stage6.mp3"
+    }
+  },
+  "stageBackgrounds": {
+    "1": "bg_stage1.png",
+    "2": "game_bg.png",
+    "3": "bg_stage3.png",
+    "4": "bg_stage4.png",
+    "5": "bg_stage5.png",
+    "6": "bg_stage6.png"
+  },
+  "illustrations": {
+    "clear": "illust_clear.png"
+  },
+  "buffs": {
+    "attack": {
+      "file": "buff_attack.png",
+      "frames": 8,
+      "frameWidth": 268,
+      "frameHeight": 205
+    },
+    "shield": {
+      "file": "buff_shield.png",
+      "frames": 8,
+      "frameWidth": 271,
+      "frameHeight": 241
+    },
+    "speed": {
+      "file": "buff_speed.png",
+      "frames": 8,
+      "frameWidth": 270,
+      "frameHeight": 240
     }
   }
 };
