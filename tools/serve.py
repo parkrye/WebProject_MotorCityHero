@@ -13,16 +13,21 @@ from __future__ import annotations
 
 import argparse
 import base64
+import collections
+import hmac
 import http.server
 import ipaddress
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import webbrowser
+from hashlib import sha256
 from http import HTTPStatus
 
 # IANA 미할당이고 Windows 임시 포트 범위(49152~) 밖이라 충돌 가능성이 낮다.
@@ -35,11 +40,121 @@ IS_WINDOWS = os.name == "nt"
 # 랭킹. 레포 안 data/scores.json 에 그냥 담아둔다.
 SCORES_PATH = os.path.join(ROOT, "data", "scores.json")
 SCORES_API = "/api/scores"
+SESSION_API = "/api/session"
 MAX_ENTRIES = 100
 MAX_NAME_LENGTH = 16
 MAX_BODY_BYTES = 4096
 NAME_CHARSET = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ")
 scores_lock = threading.Lock()
+
+# --- 랭킹 위조 방지 -----------------------------------------------------------
+#
+# 예전에는 POST /api/scores 가 완전히 열려 있어서 curl 한 줄이면 아무 점수나
+# 꽂을 수 있었다. 아래로 문턱을 올린다.
+#
+#   1. 기록하려면 먼저 POST /api/session 으로 1회용 토큰을 받아야 한다.
+#      토큰은 발급 IP 에 묶이고, 쓰면 사라지고, 시간이 지나면 만료된다.
+#   2. 제출 본문은 그 세션의 열쇠로 HMAC 서명해야 한다.
+#   3. 같은 출처에서 온 요청인지(Origin · Sec-Fetch-Site) 본다.
+#   4. 점수 · 스테이지가 그 시점에 나올 수 있는 값인지, 토큰을 받은 뒤
+#      최소한의 플레이 시간이 흘렀는지 본다.
+#   5. IP 당 발급 · 제출 횟수를 제한한다.
+#
+# 열쇠가 브라우저 안에 있는 이상 게임 코드를 읽으면 우회할 수 있다.
+# 클라이언트를 신뢰하는 구조에서 이건 원리적으로 못 막는다. 목적은 완전 차단이
+# 아니라 "URL 을 알아냈다" 수준의 조작을 무의미하게 만드는 것이다.
+SESSION_TTL_SECONDS = 3 * 60 * 60   # 한 판이 아무리 길어도 이 안에 끝난다
+SESSION_MAX = 2000                  # 메모리 상한. 넘으면 오래된 것부터 버린다
+MIN_SECONDS_PER_STAGE = 45          # 스테이지 하나를 넘기는 데 최소로 걸리는 시간
+RATE_WINDOW_SECONDS = 600
+RATE_MAX_SESSIONS = 40
+RATE_MAX_SUBMITS = 20
+
+# 스테이지 N 에서 기록될 수 있는 점수 상한. js/config.js 의 CONFIG.score 를
+# 최대치로 굴린 값에 여유를 얹었다. 밸런스를 크게 바꾸면 같이 손봐야 한다.
+STAGE_SCORE_CAP = [25_000, 175_000, 360_000, 585_000, 855_000, 999_999]
+MAX_SCORE = STAGE_SCORE_CAP[-1]
+MAX_STAGE = len(STAGE_SCORE_CAP)
+
+sessions = {}  # token -> {"secret", "ip", "issued"}
+rate_log = collections.defaultdict(list)  # (ip, kind) -> [timestamp]
+sessions_lock = threading.Lock()
+
+
+def rate_allow(ip, kind, limit):
+    """IP 당 RATE_WINDOW_SECONDS 안에서 limit 번까지만 허용한다."""
+    now = time.time()
+    with sessions_lock:
+        hits = [t for t in rate_log[(ip, kind)] if now - t < RATE_WINDOW_SECONDS]
+        allowed = len(hits) < limit
+        if allowed:
+            hits.append(now)
+        rate_log[(ip, kind)] = hits
+    return allowed
+
+
+def open_session(ip):
+    """1회용 기록 토큰을 발급한다. 게임을 새로 시작할 때 한 번 받아간다."""
+    token = secrets.token_hex(16)
+    entry = {"secret": secrets.token_hex(32), "ip": ip, "issued": time.time()}
+
+    with sessions_lock:
+        now = time.time()
+        for old in [t for t, e in sessions.items() if now - e["issued"] > SESSION_TTL_SECONDS]:
+            sessions.pop(old, None)
+        while len(sessions) >= SESSION_MAX:
+            sessions.pop(next(iter(sessions)))
+        sessions[token] = entry
+
+    return {"token": token, "secret": entry["secret"]}
+
+
+def find_session(token, ip):
+    """토큰을 확인만 한다. 실제 소모는 검증을 다 통과한 뒤 consume_session 이 한다.
+    @returns (세션, 거절 사유)"""
+    if not isinstance(token, str) or not token:
+        return None, "no session"
+
+    with sessions_lock:
+        entry = sessions.get(token)
+
+    if entry is None:
+        return None, "unknown session"
+    if entry["ip"] != ip:
+        return None, "session from another host"
+    if time.time() - entry["issued"] > SESSION_TTL_SECONDS:
+        return None, "session expired"
+    return entry, None
+
+
+def consume_session(token):
+    """기록이 실제로 들어간 뒤에 태운다. 토큰 하나에 기록 하나."""
+    with sessions_lock:
+        sessions.pop(token, None)
+
+
+def sign_payload(secret, payload):
+    """클라이언트와 같은 규칙으로 정규화해서 서명한다. 순서가 곧 규칙이다."""
+    message = "%s|%s|%d|%d|%d" % (
+        payload.get("token", ""),
+        clean_name(payload.get("name")),
+        clamp_int(payload.get("score"), 0, MAX_SCORE),
+        clamp_int(payload.get("stage"), 1, MAX_STAGE, 1),
+        clamp_int(payload.get("at"), 0, 2 ** 53),
+    )
+    return hmac.new(secret.encode("utf-8"), message.encode("utf-8"), sha256).hexdigest()
+
+
+def check_score(session, score, stage):
+    """그 시점에 나올 수 있는 점수인지. @returns 거절 사유 또는 None"""
+    if score > STAGE_SCORE_CAP[stage - 1]:
+        return "score too high for stage %d" % stage
+
+    # 스테이지를 넘기려면 최소한의 시간이 든다. 받자마자 6스테이지를 낼 수는 없다.
+    played = time.time() - session["issued"]
+    if played < (stage - 1) * MIN_SECONDS_PER_STAGE:
+        return "stage %d too early (%.0fs)" % (stage, played)
+    return None
 
 
 def clean_name(value):
@@ -76,8 +191,8 @@ def add_score(payload):
     """기록 하나를 더하고 정리된 전체 목록을 돌려준다."""
     entry = {
         "name": clean_name(payload.get("name")),
-        "score": clamp_int(payload.get("score"), 0, 99_999_999),
-        "stage": clamp_int(payload.get("stage"), 1, 99, 1),
+        "score": clamp_int(payload.get("score"), 0, MAX_SCORE),
+        "stage": clamp_int(payload.get("stage"), 1, MAX_STAGE, 1),
         "at": clamp_int(payload.get("at"), 0, 2**53, int(time.time() * 1000)),
     }
 
@@ -121,25 +236,103 @@ class GameHandler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    @property
+    def client_ip(self) -> str:
+        return self.client_address[0]
+
+    def same_origin(self) -> bool:
+        """브라우저가 이 페이지에서 보낸 요청인지. 손으로 만든 요청을 걸러낸다."""
+        site = self.headers.get("Sec-Fetch-Site")
+        if site is not None:
+            return site == "same-origin"
+
+        # Sec-Fetch-* 를 안 보내는 구형 브라우저는 Origin/Referer 의 host 로 본다.
+        host = (self.headers.get("Host") or "").strip()
+        for header in ("Origin", "Referer"):
+            value = self.headers.get(header)
+            if not value:
+                continue
+            return urllib.parse.urlsplit(value).netloc == host
+        return False
+
+    def read_json(self):
+        """본문을 끝까지 읽고 해석한다. @returns (본문 dict, 오류 메시지)"""
+        declared = clamp_int(self.headers.get("Content-Length"), 0, 2 ** 31)
+        if declared > MAX_BODY_BYTES:
+            self.close_connection = True # 남은 본문을 읽지 않고 끊는다
+            return None, "body too large"
+
+        raw = self.rfile.read(declared)
+        if "application/json" not in (self.headers.get("Content-Type") or ""):
+            return None, "expected application/json"
+
+        try:
+            payload = json.loads(raw or b"{}")
+        except ValueError:
+            return None, "invalid json"
+
+        if not isinstance(payload, dict):
+            return None, "invalid payload"
+        return payload, None
+
     def do_POST(self) -> None:
-        if self.path.split("?")[0] != SCORES_API:
+        path = self.path.split("?")[0]
+        if path not in (SCORES_API, SESSION_API):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
 
-        length = clamp_int(self.headers.get("Content-Length"), 0, MAX_BODY_BYTES)
-        try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
-        except ValueError:
-            self.send_json({"error": "invalid json"}, HTTPStatus.BAD_REQUEST)
+        # 거절하더라도 본문은 먼저 다 읽어야 한다. 안 읽고 응답하면 keep-alive
+        # 연결에서 다음 요청이 이 본문을 요청 줄로 읽어 어긋난다.
+        payload, error = self.read_json()
+
+        if not self.same_origin():
+            self.reject("cross-origin request", HTTPStatus.FORBIDDEN)
+            return
+        if error:
+            self.reject(error, HTTPStatus.BAD_REQUEST)
             return
 
-        if not isinstance(payload, dict):
-            self.send_json({"error": "invalid payload"}, HTTPStatus.BAD_REQUEST)
+        if path == SESSION_API:
+            self.post_session()
+            return
+        self.post_score(payload)
+
+    def post_session(self) -> None:
+        if not rate_allow(self.client_ip, "session", RATE_MAX_SESSIONS):
+            self.reject("too many sessions", HTTPStatus.TOO_MANY_REQUESTS)
+            return
+        self.send_json(open_session(self.client_ip))
+
+    def post_score(self, payload) -> None:
+        if not rate_allow(self.client_ip, "score", RATE_MAX_SUBMITS):
+            self.reject("too many submissions", HTTPStatus.TOO_MANY_REQUESTS)
             return
 
+        session, error = find_session(payload.get("token"), self.client_ip)
+        if error:
+            self.reject(error, HTTPStatus.FORBIDDEN)
+            return
+
+        expected = sign_payload(session["secret"], payload)
+        if not hmac.compare_digest(expected, str(payload.get("sig") or "")):
+            self.reject("bad signature", HTTPStatus.FORBIDDEN)
+            return
+
+        score = clamp_int(payload.get("score"), 0, MAX_SCORE)
+        stage = clamp_int(payload.get("stage"), 1, MAX_STAGE, 1)
+        error = check_score(session, score, stage)
+        if error:
+            self.reject(error, HTTPStatus.FORBIDDEN)
+            return
+
+        consume_session(payload["token"])
         entries = add_score(payload)
-        print("  [기록] %s  %s" % (clean_name(payload.get("name")), payload.get("score", 0)))
+        print("  [기록] %s  %s" % (clean_name(payload.get("name")), score))
         self.send_json({"entries": entries})
+
+    def reject(self, reason, status) -> None:
+        print("  [거절] %s  %s (%s)" % (self.client_ip, reason, self.path))
+        self.send_json({"error": reason}, status)
 
     def send_json(self, payload, status=HTTPStatus.OK) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

@@ -75,6 +75,9 @@ class Game {
     this.usedContinue = false;
     this.powerStacks = 0; // 누적 공격력 강화. 스테이지를 넘어가도 이어진다.
 
+    // 랭킹 기록용 1회용 토큰. 여기서 받아둬야 게임 오버 때 올릴 수 있다.
+    this.board.openSession();
+
     this.sparks.clear();
     this.shake.clear();
     this.#startStage(1);
