@@ -90,6 +90,23 @@ class AudioBank {
     });
   }
 
+  /**
+   * 길게 도는 효과음을 앞으로 감는다. 컨티뉴 카운트다운을 건너뛸 때 화면만 당기면
+   * 세는 목소리가 어긋나므로 소리도 같은 만큼 밀어준다.
+   */
+  skip(name, seconds) {
+    const pool = this.pools.get(name);
+    if (!pool) return;
+
+    for (const element of pool.items) {
+      if (element.paused) continue;
+
+      // 메타데이터를 아직 못 받았으면 duration 이 NaN 이다. 그때는 끝을 모르니 그냥 더한다.
+      const end = Number.isFinite(element.duration) ? element.duration : Infinity;
+      element.currentTime = Math.min(element.currentTime + seconds, end);
+    }
+  }
+
   /** 길게 도는 효과음(컨티뉴 카운트다운)을 도중에 끊을 때. */
   stop(name) {
     const pool = this.pools.get(name);

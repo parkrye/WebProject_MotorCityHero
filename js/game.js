@@ -342,6 +342,13 @@ class Game {
       return;
     }
 
+    // 이어갈 생각이 없으면 11초를 다 볼 이유가 없다. 코인 말고 아무 키나 누르면 당긴다.
+    if (this.input.justPressedAny(["coin"])) {
+      const { skipSeconds } = CONFIG.continue;
+      this.continueTimer -= skipSeconds;
+      this.audio.skip("countdown", skipSeconds);
+    }
+
     this.continueTimer -= dt;
     if (this.continueTimer <= 0) {
       this.audio.stop("countdown");

@@ -300,6 +300,7 @@ class Hud {
     const shown = countdownNumber(secondsLeft);
     if (shown !== null) this.#center(String(shown), height * 0.36, 132);
     this.#center(this.touch ? "TAP P TO INSERT COIN" : "PRESS P TO INSERT COIN", height * 0.68, 26);
+    this.#center(this.touch ? "TAP A OR B TO HURRY" : "ANY OTHER KEY TO HURRY", height * 0.76, 18, 0.7);
   }
 
   /** 컨티뉴 실패 후 암전. */

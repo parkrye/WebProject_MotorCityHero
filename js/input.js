@@ -80,6 +80,17 @@ class Pad {
     return { x, y };
   }
 
+  /**
+   * 이번 프레임에 새로 눌린 키가 하나라도 있는지.
+   * @param {string[]} exclude  따로 처리하는 동작(코인 등)은 빼고 본다
+   */
+  pressedAny(exclude = []) {
+    for (const action of this.pressed) {
+      if (!exclude.includes(action)) return true;
+    }
+    return false;
+  }
+
   /** 메뉴용. 누르고 있어도 한 칸만 움직이도록 눌린 순간만 본다. */
   step() {
     const x = (this.justPressed("right") ? 1 : 0) - (this.justPressed("left") ? 1 : 0);
@@ -147,6 +158,10 @@ class Input {
 
   get confirmed() {
     return this.pad.confirmed;
+  }
+
+  justPressedAny(exclude = []) {
+    return this.pad.pressedAny(exclude);
   }
 
   menuStep() {
