@@ -73,6 +73,7 @@ class Game {
     this.timeUp = false;
     this.finalClear = false;
     this.usedContinue = false;
+    this.powerStacks = 0; // 누적 공격력 강화. 스테이지를 넘어가도 이어진다.
 
     this.sparks.clear();
     this.shake.clear();
@@ -95,7 +96,7 @@ class Game {
     this.clearLines = [];
     this.stageBannerTimer = 0;
     this.clearTimer = 0;
-    this.introLeadTimer = CONFIG.intro.illustMs / 1000;
+    this.introLeadTimer = CONFIG.intro.leadMs / 1000;
     this.cameraX = 0;
     this.countdownIndex = 0;
     this.countdownTimer = CONFIG.intro.countdownMs / 1000;
@@ -118,15 +119,16 @@ class Game {
     this.player = new Player(this.assets.player, CONFIG.intro.startX, (top + bottom) / 2 + 40, {
       audio: this.audio,
       buffAnims: this.assets.buffs,
+      powerStacks: this.powerStacks, // 스테이지가 바뀌어도 강화는 그대로 이어받는다
     });
   }
 
-  /** 배경 일러스트를 먼저 보여주고, 그다음에 플레이어가 화면 밖에서 걸어 들어온다. */
+  /** 스테이지 배경을 먼저 보여주고, 그다음에 플레이어가 화면 밖에서 걸어 들어온다. */
   #updateIntro(dt) {
     if (this.introLeadTimer > 0) {
       this.introLeadTimer -= dt;
       if (this.introLeadTimer <= 0) {
-        this.player.autoWalkTargetX = CONFIG.view.width * CONFIG.camera.anchorRatio;
+        this.player.startWalkIn(CONFIG.view.width * CONFIG.camera.anchorRatio);
       }
       return;
     }
@@ -134,15 +136,28 @@ class Game {
     if (this.#introFinished()) this.state = GAME_STATE.COUNTDOWN;
   }
 
+  /** 마지막 스테이지인지. 여기를 끝내야 게임 클리어다. */
+  get isFinalStage() {
+    return this.stage >= CONFIG.stages.length;
+  }
+
   /**
-   * 클리어 일러스트를 띄우는 구간인지. 필드를 잠깐 보여준 다음부터다.
-   * 마지막 스테이지를 끝낸 암전도 일러스트 위에서 진행해야 화면이 튀지 않는다.
+   * 클리어 결과를 띄우는 구간인지. 필드를 잠깐 보여준 다음부터다.
+   * 마지막 스테이지를 끝낸 암전 구간도 결과 화면 위에서 진행해야 화면이 튀지 않는다.
    */
-  get showingClearArt() {
+  get showingClearResult() {
     if (this.state === GAME_STATE.STAGE_CLEAR) {
       return this.clearTimer * 1000 >= CONFIG.stageClear.fieldMs;
     }
     return this.finalClear && this.state === GAME_STATE.FADEOUT;
+  }
+
+  /**
+   * 클리어 일러스트로 화면을 덮는 구간인지.
+   * 일러스트는 게임 전체를 끝냈을 때만 나온다. 중간 스테이지는 그대로 필드를 보여준다.
+   */
+  get showingClearArt() {
+    return this.isFinalStage && this.showingClearResult;
   }
 
   /** 터치 기기면 화면 안내 문구도 그쪽 버튼 이름으로 바꾼다. */
@@ -288,7 +303,7 @@ class Game {
   }
 
   #introFinished() {
-    return this.player.autoWalkTargetX === null;
+    return !this.player.entering;
   }
 
   /** 잠깐 점수를 보여준 뒤 이름 등록으로 넘어간다. */
@@ -412,7 +427,7 @@ class Game {
   #awardClearBonus() {
     const { stageClear, timePerSecond, noHit, noContinue } = CONFIG.score;
     const index = this.stage - 1;
-    const last = this.stage >= CONFIG.stages.length;
+    const last = this.isFinalStage;
 
     const lines = [
       { label: "STAGE BONUS", value: stageClear[index] ?? 0 },
@@ -439,15 +454,15 @@ class Game {
     this.shake.update(dt);
     this.#updateCamera(dt);
 
-    const { fieldMs, illustMs } = CONFIG.stageClear;
-    if (this.clearTimer * 1000 < fieldMs + illustMs) return;
+    const { fieldMs, resultMs } = CONFIG.stageClear;
+    if (this.clearTimer * 1000 < fieldMs + resultMs) return;
 
     this.#advanceStage();
   }
 
   /** 마지막 스테이지까지 끝냈으면 암전 후 게임 오버로 마무리한다. */
   #advanceStage() {
-    if (this.stage >= CONFIG.stages.length) {
+    if (this.isFinalStage) {
       this.finalClear = true;
       this.state = GAME_STATE.FADEOUT;
       this.fadeTimer = 0;
@@ -557,20 +572,19 @@ class Game {
     }
   }
 
-  /** 회복 아이템을 먼저 굴리고, 빗나가면 그다음에 버프 아이템을 굴린다. */
+  /** 드랍표를 위에서부터 한 번의 주사위로 훑는다. 어디에도 안 걸리면 안 떨어진다. */
   #maybeDrop(enemy) {
-    const { dropChance, buffChance } = CONFIG.pickup;
     const roll = Math.random();
+    let threshold = 0;
 
-    if (roll < dropChance) {
-      this.pickups.push(new Pickup(this.assets.icons.healItem, enemy.x, enemy.y));
+    for (const { kind, chance } of CONFIG.pickup.drops) {
+      threshold += chance;
+      if (roll >= threshold) continue;
+
+      const icon = kind === "heal" ? this.assets.icons.healItem : this.assets.icons[`powerup_${kind}`];
+      if (icon) this.pickups.push(new Pickup(icon, enemy.x, enemy.y, kind));
       return;
     }
-    if (roll >= dropChance + buffChance) return;
-
-    const kind = BUFF_KINDS[Math.floor(Math.random() * BUFF_KINDS.length)];
-    const icon = this.assets.icons[`powerup_${kind}`];
-    if (icon) this.pickups.push(new Pickup(icon, enemy.x, enemy.y, kind));
   }
 
   #updatePickups(dt) {
@@ -585,6 +599,8 @@ class Game {
 
       if (pickup.kind === "heal") {
         this.lives += 1;
+      } else if (pickup.kind === "attack") {
+        this.powerStacks = this.player.gainPower(); // 다음 스테이지로 넘길 수 있게 게임 쪽에도 남긴다
       } else {
         this.player.applyBuff(pickup.kind);
       }
@@ -727,9 +743,12 @@ class Game {
       return;
     }
 
-    // 클리어 일러스트 위에는 HUD 를 얹지 않는다. 연출만 보여준다.
-    if (this.showingClearArt) {
-      this.hud.drawStageClear(this.stage, this.stageDef.name, this.clearLines, this.score);
+    // 클리어 결과 위에는 HUD 를 얹지 않는다. 연출만 보여준다.
+    if (this.showingClearResult) {
+      this.hud.drawStageClear(this.stage, this.stageDef.name, this.clearLines, this.score, {
+        final: this.isFinalStage,
+        dim: !this.showingClearArt, // 일러스트가 아니라 필드 위라면 글자가 묻히지 않게 깔아준다
+      });
       if (this.state === GAME_STATE.FADEOUT) {
         this.hud.drawFade(this.fadeTimer / (CONFIG.continue.fadeMs / 1000));
       }
@@ -744,6 +763,7 @@ class Game {
       stage: this.stage,
       time: this.stageTimer,
       buffs: this.player.activeBuffs,
+      power: this.player.powerStacks,
     });
 
     if (this.boss && !this.boss.dead) this.hud.drawBossBar(this.boss.hp / this.boss.maxHp);

@@ -76,7 +76,7 @@ class Hud {
     this.font.draw(this.ctx, text, CONFIG.view.width / 2, y, { size, align: "center", alpha });
   }
 
-  drawStats({ lives, coins, score, hiScore, stage, time, buffs = [] }) {
+  drawStats({ lives, coins, score, hiScore, stage, time, buffs = [], power = 0 }) {
     const ctx = this.ctx;
     const { width } = CONFIG.view;
     const { barHeight, iconSize, iconGap, labelSize, maxHeartIcons } = CONFIG.hud;
@@ -111,22 +111,30 @@ class Hud {
     this.font.draw(ctx, `SCORE ${padScore(score)}`, 24, scoreY, { size: 26 });
     this.font.draw(ctx, `HI SCORE ${padScore(hiScore)}`, width - 24, scoreY, { size: 26, align: "right" });
 
-    this.#drawBuffs(buffs, scoreY);
+    this.#drawBuffs(buffs, power, scoreY);
   }
 
-  /** 걸려 있는 버프와 남은 초. 보호막은 시간이 아니라 한 번 막을 때까지라 ON 으로 적는다. */
-  #drawBuffs(buffs, y) {
-    if (buffs.length === 0) return;
+  /**
+   * 누적 공격력과 걸려 있는 버프를 한 줄로 늘어놓는다.
+   * 공격력은 시간이 아니라 단계라 LV 로, 보호막은 한 번 막을 때까지라 ON 으로 적는다.
+   * 폰트에 소수점이 없어 배율(1.5 배) 대신 단계로 보여준다.
+   */
+  #drawBuffs(buffs, power, y) {
+    const slots = [];
+    if (power > 0) slots.push({ kind: "attack", label: `LV ${power}` });
+    for (const { kind, seconds } of buffs) {
+      slots.push({ kind, label: seconds === Infinity ? "ON" : String(Math.ceil(seconds)) });
+    }
+    if (slots.length === 0) return;
 
     const { buffIconSize, buffLabelSize, buffGap } = CONFIG.hud;
-    let x = CONFIG.view.width / 2 - (buffs.length * (buffIconSize + buffGap + 42)) / 2;
+    let x = CONFIG.view.width / 2 - (slots.length * (buffIconSize + buffGap + 42)) / 2;
 
-    for (const { kind, seconds } of buffs) {
+    for (const { kind, label } of slots) {
       const icon = this.icons[`powerup_${kind}`];
       if (!icon) continue;
 
       x += this.#icon(icon, x, y - 4, buffIconSize) + 6;
-      const label = seconds === Infinity ? "ON" : String(Math.ceil(seconds));
       x += this.font.draw(this.ctx, label, x, y + 2, { size: buffLabelSize, alpha: 0.9 }) + buffGap;
     }
   }
@@ -186,7 +194,7 @@ class Hud {
     this.#center(name, CONFIG.view.height * 0.3, 34, alpha * 0.85);
   }
 
-  /** 스테이지 진입 화면. 배경 일러스트 위에 어디로 들어가는지 알려준다. */
+  /** 스테이지 진입 화면. 스테이지 배경 위에 어디로 들어가는지 알려준다. */
   drawStageIntro(stage, name) {
     const { height } = CONFIG.view;
     this.#center(`STAGE ${stage}`, height * 0.18, 62);
@@ -221,13 +229,21 @@ class Hud {
   }
 
   /** @param {{label: string, value: number}[]} lines  이번 스테이지에서 번 점수 내역 */
-  drawStageClear(stage, name, lines, total) {
+  drawStageClear(stage, name, lines, total, { final = false, dim = false } = {}) {
     const ctx = this.ctx;
     const { width, height } = CONFIG.view;
     const half = 220;
 
-    this.#center("STAGE CLEAR", height * 0.16, 64);
-    this.#center(`STAGE ${stage}  ${name}`, height * 0.28, 26, 0.85);
+    // 필드 위에 그대로 얹을 때는 배경이 밝아 글자가 묻힌다. 한 겹 깔아준다.
+    if (dim) {
+      ctx.save();
+      ctx.fillStyle = "rgba(2, 4, 10, 0.62)";
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
+    this.#center(final ? "GAME CLEAR" : "STAGE CLEAR", height * 0.16, 64);
+    this.#center(final ? "ALL STAGE CLEAR" : `STAGE ${stage}  ${name}`, height * 0.28, 26, 0.85);
 
     let y = height * 0.42;
     for (const { label, value } of lines) {

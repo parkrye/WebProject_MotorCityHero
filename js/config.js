@@ -102,17 +102,32 @@ const CONFIG = {
 
   // 버프 아이템. 종류가 다르면 함께 걸리고, 같은 걸 다시 먹으면 시간만 갱신된다.
   // 보호막만 시간이 아니라 "한 번 막을 때까지"이고 스테이지가 바뀌면 사라진다.
+  // 공격력은 버프가 아니라 아래 power 로 한 판 내내 쌓인다.
   buffs: {
     frameDuration: 90,
-    scale: 0.9, // 캐릭터 발밑 이펙트 크기. 원근 배율에 곱한다
-    attack: { durationMs: 15000, damageBonus: 9 },
+    scale: 0.9,   // 캐릭터 발밑 이펙트 크기. 원근 배율에 곱한다
+    offsetY: 26,  // 발끝보다 이만큼 아래에 깔린다. 원근 배율이 곱해진다
     speed: { durationMs: 10000, factor: 1.42 },
     shield: { durationMs: null, graceMs: 900 },
+    powerFlashMs: 1000, // 파워업을 먹은 직후 공격 오라를 잠깐 보여주는 시간
+  },
+
+  // 공격력 강화. 시간이 아니라 한 판(게임 오버 전까지) 내내 누적된다.
+  // 스테이지가 바뀌어도, 쓰러졌다 컨티뉴해도 유지된다.
+  power: {
+    perStack: 0.15, // 한 개당 기본 공격력(12)의 이 비율만큼 더해진다
+    maxStacks: 10,  // 최대 2.5배(대미지 30)에서 멈춘다
   },
 
   pickup: {
-    dropChance: 0.05, // 적 격파 시 회복 아이템 드랍 확률
-    buffChance: 0.06, // 그다음 이 확률로 버프 아이템 하나가 떨어진다
+    // 적 격파 시 위에서부터 차례로 굴린다. 합이 전체 드랍 확률이다.
+    // 공격력은 계속 쌓이는 대신 하나당 효과가 작아서 조금 더 자주 떨어진다.
+    drops: [
+      { kind: "attack", chance: 0.035 },
+      { kind: "heal", chance: 0.05 },
+      { kind: "shield", chance: 0.022 },
+      { kind: "speed", chance: 0.022 },
+    ],
     scale: 0.5,
     bounceSpeed: 260,
     bounceDamping: 0.42,
@@ -200,9 +215,11 @@ const CONFIG = {
     bannerMs: 1800,
   },
 
+  // 클리어 연출. 보통 스테이지는 그 스테이지 배경 위에 결과만 얹고,
+  // 마지막 스테이지를 끝냈을 때만 클리어 일러스트로 화면을 덮는다.
   stageClear: {
     fieldMs: 900,   // 보스가 쓰러지는 걸 보여주는 시간
-    illustMs: 2600, // 클리어 일러스트를 띄우는 시간
+    resultMs: 2600, // 그다음 결과 화면을 띄우는 시간
   },
 
   spawn: {
@@ -222,7 +239,7 @@ const CONFIG = {
   intro: {
     startX: -120,
     walkSpeed: 190,
-    illustMs: 1300, // 배경 일러스트만 보여주는 시간. 그다음에 플레이어가 걸어 들어온다
+    leadMs: 1300,   // 스테이지 배경만 보여주는 시간. 그다음에 플레이어가 걸어 들어온다
     countdown: ["3", "2", "1", "START"],
     countdownMs: 620,
   },
@@ -241,8 +258,6 @@ const CONFIG = {
   },
 };
 
-// 버프 시트(buff_frames.png)의 위에서부터 순서와 같다.
-const BUFF_KINDS = ["attack", "shield", "speed"];
 
 /** @returns {object} 스테이지 정의. 범위를 벗어나면 마지막 스테이지로 잡는다. */
 function stageConfig(stage) {

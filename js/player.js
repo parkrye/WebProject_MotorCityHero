@@ -6,7 +6,7 @@
 const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
 
 class Player extends Actor {
-  constructor(anims, x, y, { audio = null, buffAnims = {} } = {}) {
+  constructor(anims, x, y, { audio = null, buffAnims = {}, powerStacks = 0 } = {}) {
     // 무엇에 맞든 한 대 = 생명 1. 개별 hp 는 쓰지 않는다.
     super({
       x,
@@ -19,6 +19,10 @@ class Player extends Actor {
     this.audio = audio;
     this.buffAnims = buffAnims;
     this.buffs = new Map(); // 종류 -> { timer, animator }. timer 가 Infinity 면 스테이지 끝까지
+    this.powerStacks = powerStacks; // 누적 공격력 강화. 한 판 내내 유지된다.
+    this.powerFlashTimer = 0;       // 파워업 직후 잠깐 뜨는 공격 오라
+    this.powerAnimator = buffAnims.attack ? new Animator(buffAnims.attack) : null;
+    this.powerAnimator?.play("loop");
     // 킥 시트가 아직 없는 빌드에서는 펀치 모션으로 대신 낸다.
     this.kickAnim = anims.kick ? "kick" : PLAYER_STATE.ATTACK;
     this.kicking = false; // 지금 나가는 공격이 킥인지. 깊이 판정이 갈린다.
@@ -27,15 +31,26 @@ class Player extends Actor {
     this.downed = false;      // 생명이 0 이 되어 쓰러진 상태. 마지막 프레임을 유지한다.
     this.invincibleTimer = 0; // 컨티뉴 직후의 짧은 무적
     this.recoveryTimer = 0;
-    this.autoWalkTargetX = null; // 인트로 연출용. null 이 아니면 입력 대신 자동 이동.
+    // 인트로 연출용. entering 동안은 화면 밖에 있어도 스테이지 경계로 끌려오지 않는다.
+    this.entering = true;
+    this.autoWalkTargetX = null; // null 이 아니면 입력 대신 이 x 까지 자동으로 걸어온다
     this.hitThisSwing = new Set();
     this.animator.play(PLAYER_STATE.IDLE);
   }
 
-  /** 버프가 얹힌 실제 공격력. */
+  /** 누적 강화가 얹힌 실제 공격력. 스택 하나당 기본값의 perStack 만큼 더해진다. */
   get attackDamage() {
-    const bonus = this.buffs.has("attack") ? CONFIG.buffs.attack.damageBonus : 0;
-    return CONFIG.player.attack.damage + bonus;
+    return Math.round(CONFIG.player.attack.damage * (1 + this.powerStacks * CONFIG.power.perStack));
+  }
+
+  /**
+   * 공격력 아이템을 먹는다. 상한에 닿아 있으면 아무 일도 없다.
+   * @returns {number} 갱신된 스택 수
+   */
+  gainPower() {
+    this.powerStacks = Math.min(CONFIG.power.maxStacks, this.powerStacks + 1);
+    this.powerFlashTimer = CONFIG.buffs.powerFlashMs / 1000;
+    return this.powerStacks;
   }
 
   get speedFactor() {
@@ -82,6 +97,11 @@ class Player extends Actor {
   }
 
   #updateBuffs(dt) {
+    if (this.powerFlashTimer > 0) {
+      this.powerFlashTimer -= dt;
+      this.powerAnimator?.update(dt);
+    }
+
     for (const [kind, buff] of this.buffs) {
       buff.animator?.update(dt);
       if (buff.timer === Infinity) continue;
@@ -128,9 +148,10 @@ class Player extends Actor {
     // 쓰러진 뒤에는 애니메이터가 마지막 프레임에서 멈춰 있다. 상태를 건드리지 않는다.
     if (this.downed) return;
 
-    if (this.autoWalkTargetX !== null) {
-      // 인트로는 화면 밖에서 시작하므로 스테이지 경계를 적용하지 않는다.
-      this.#updateAutoWalk(dt);
+    // 인트로는 화면 밖에서 시작한다. 걸어 들어와 자리를 잡기 전까지는
+    // 스테이지 경계를 적용하지 않는다. 클램프하면 왼쪽 끝으로 튀어 들어온다.
+    if (this.entering) {
+      this.#updateEntrance(dt);
       return;
     }
 
@@ -145,16 +166,28 @@ class Player extends Actor {
     this.clampToStage(this.bodyWidth);
   }
 
-  #updateAutoWalk(dt) {
+  /** 걸어 들어오라는 신호. 그전까지는 화면 밖에 가만히 서 있는다. */
+  startWalkIn(targetX) {
+    this.autoWalkTargetX = targetX;
+  }
+
+  #updateEntrance(dt) {
+    // 아직 신호가 없으면 화면 밖에서 대기만 한다.
+    if (this.autoWalkTargetX === null) {
+      this.#enterState(PLAYER_STATE.IDLE);
+      return;
+    }
+
     this.facing = 1;
     this.#enterState(PLAYER_STATE.WALK);
     this.x += CONFIG.intro.walkSpeed * dt;
 
-    if (this.x >= this.autoWalkTargetX) {
-      this.x = this.autoWalkTargetX;
-      this.autoWalkTargetX = null;
-      this.#enterState(PLAYER_STATE.IDLE);
-    }
+    if (this.x < this.autoWalkTargetX) return;
+
+    this.x = this.autoWalkTargetX;
+    this.autoWalkTargetX = null;
+    this.entering = false;
+    this.#enterState(PLAYER_STATE.IDLE);
   }
 
   #updateBusy() {
@@ -238,7 +271,7 @@ class Player extends Actor {
   /** 생명이 0 이 되었을 때. hit 마지막 프레임(쓰러진 자세)에서 멈춘다. */
   knockOut() {
     this.downed = true;
-    this.buffs.clear(); // 쓰러지면 걸려 있던 버프도 함께 사라진다
+    this.buffs.clear(); // 쓰러지면 걸려 있던 버프는 사라진다. 누적 공격력은 남는다.
     if (this.state === PLAYER_STATE.HIT) return; // 맞고 넘어가는 중이면 그대로 이어서
 
     this.state = PLAYER_STATE.HIT;
@@ -267,12 +300,23 @@ class Player extends Actor {
     this.animator.draw(ctx, screenX, this.y, scale, this.isFlipped, { tint: this.tint, alpha });
   }
 
-  /** 버프 이펙트는 발 위치에 캐릭터보다 먼저 그려서 몸에 가려지게 둔다. */
+  /**
+   * 버프 이펙트는 발밑에 캐릭터보다 먼저 그려서 몸에 가려지게 둔다.
+   * 발끝보다 offsetY 만큼 더 내려야 정강이가 아니라 바닥에서 피어오르는 것처럼 보인다.
+   */
   #drawBuffs(ctx, screenX, scale, alpha) {
     if (this.downed) return;
 
+    const y = this.y + CONFIG.buffs.offsetY * scale;
+    const effectScale = scale * CONFIG.buffs.scale;
+
+    if (this.powerFlashTimer > 0) {
+      const fade = Math.min(1, this.powerFlashTimer / 0.35); // 사라질 때만 부드럽게 뺀다
+      this.powerAnimator?.draw(ctx, screenX, y, effectScale, false, { alpha: alpha * 0.9 * fade });
+    }
+
     for (const buff of this.buffs.values()) {
-      buff.animator?.draw(ctx, screenX, this.y, scale * CONFIG.buffs.scale, false, { alpha: alpha * 0.9 });
+      buff.animator?.draw(ctx, screenX, y, effectScale, false, { alpha: alpha * 0.9 });
     }
   }
 }
