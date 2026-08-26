@@ -110,20 +110,53 @@ const CONFIG = {
     rangeY: 30,
   },
 
-  // 스테이지(= enemy_N)별 능력치. 숫자가 커질수록 강해진다.
-  // hp 는 플레이어 공격력(12) 기준 "몇 대 맞아야 죽는지"로 잡았다: 1, 2, 3, 4, 5, 6대.
+  // 에너미 능력치. 스테이지가 아니라 "몇 번 에너미인지" 기준이다.
+  // hp 는 플레이어 공격력(12) 기준 "몇 대 맞아야 죽는지"로 잡았다.
   // 반대로 플레이어는 무엇에 맞든 한 대 = 생명 1 이라 에너미 쪽 damage 는 없다.
-  enemyStages: [
-    { stage: 1, hp: 10, speed: 96,  score: 100,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72 },
-    { stage: 2, hp: 20, speed: 86,  score: 220,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80 },
-    { stage: 3, hp: 32, speed: 102, score: 380,  attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84 },
-    { stage: 4, hp: 44, speed: 92,  score: 600,  attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96 },
-    { stage: 5, hp: 56, speed: 112, score: 900,  attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88 },
-    { stage: 6, hp: 68, speed: 100, score: 1400, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98 },
+  enemies: [
+    { id: 1, hp: 10, speed: 96,  score: 60,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72 },
+    { id: 2, hp: 20, speed: 86,  score: 90,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80 },
+    { id: 3, hp: 32, speed: 102, score: 130, attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84 },
+    { id: 4, hp: 44, speed: 92,  score: 180, attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96 },
+    { id: 5, hp: 56, speed: 112, score: 240, attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88 },
+    { id: 6, hp: 68, speed: 100, score: 310, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98 },
+    { id: 7, hp: 82, speed: 108, score: 390, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94 },
   ],
 
-  // 누적 점수가 이 값을 넘으면 해당 인덱스의 스테이지가 해금된다.
-  stageThresholds: [0, 600, 1600, 3200, 5600, 9000],
+  // 스테이지 구성. major 가 다수, minor 가 소수, boss 가 최종보스다.
+  // 이름은 비트맵 폰트에 있는 글자(A-Z · 0-9 · 공백)로만 쓴다.
+  stages: [
+    { stage: 1, name: "TEXAS",           bgm: "stage1", major: 1, minor: 2, boss: 3 },
+    { stage: 2, name: "DETROIT",         bgm: "stage2", major: 2, minor: 3, boss: 4 },
+    { stage: 3, name: "NEW YORK CITY",   bgm: "stage3", major: 3, minor: 4, boss: 5 },
+    { stage: 4, name: "TESLA SPACESHIP", bgm: "stage4", major: 4, minor: 5, boss: 6 },
+    { stage: 5, name: "MOON BASE",       bgm: "stage5", major: 5, minor: 6, boss: 7 },
+    // 수수께끼 공간. 모든 에너미가 나오고 보스가 없다. 시간이 다 되거나 쓰러지면
+    // 코인을 쓰지 않고 그대로 클리어된다. 점수 파밍용이라 항상 마지막이다.
+    { stage: 6, name: "MYSTERY ZONE",    bgm: "stage6", endless: true },
+  ],
+
+  // 스테이지 제한 시간. 5분에서 0 으로 줄고, 3분 남는 순간 최종보스가 나온다.
+  stageTimer: {
+    seconds: 300,
+    bossAtRemaining: 180,
+    endlessSeconds: 60, // 파밍 스테이지는 1분
+    warnRemaining: 30,  // 이 아래로 남으면 시계가 붉게 깜빡인다
+  },
+
+  // 최종보스는 같은 에너미를 체력과 크기만 키워 특별하게 세운다.
+  boss: {
+    hpMultiplier: 7,
+    scaleMultiplier: 1.55,
+    scoreMultiplier: 6,
+    speedMultiplier: 0.86, // 덩치값을 하느라 조금 느리다
+    bannerMs: 1800,
+  },
+
+  stageClear: {
+    fieldMs: 900,   // 보스가 쓰러지는 걸 보여주는 시간
+    illustMs: 2600, // 클리어 일러스트를 띄우는 시간
+  },
 
   spawn: {
     firstDelay: 900,
@@ -135,6 +168,7 @@ const CONFIG = {
     maxAliveCap: 5,
     marginX: 90,          // 화면 밖 어느 정도에서 등장시킬지
     fromLeftChance: 0.2,  // 흐름은 좌>우 이므로 대부분 오른쪽에서 등장
+    minorChance: 0.25,    // 다수(major) 사이에 소수(minor)가 섞이는 비율
     frameDuration: 80,
   },
 
@@ -147,6 +181,7 @@ const CONFIG = {
 
   hud: {
     stageBannerMs: 1600,
+    bossBarWidth: 460,
     barHeight: 104,
     iconSize: 38,
     iconGap: 8,
@@ -154,3 +189,13 @@ const CONFIG = {
     maxHeartIcons: 10, // 이보다 많아지면 아이콘 하나 + X n 으로 축약
   },
 };
+
+/** @returns {object} 스테이지 정의. 범위를 벗어나면 마지막 스테이지로 잡는다. */
+function stageConfig(stage) {
+  return CONFIG.stages[clamp(stage, 1, CONFIG.stages.length) - 1];
+}
+
+/** @returns {object} 에너미 번호별 능력치. */
+function enemyStats(id) {
+  return CONFIG.enemies[clamp(id, 1, CONFIG.enemies.length) - 1];
+}

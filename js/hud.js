@@ -75,7 +75,7 @@ class Hud {
     this.font.draw(this.ctx, text, CONFIG.view.width / 2, y, { size, align: "center", alpha });
   }
 
-  drawStats({ lives, coins, score, hiScore, stage }) {
+  drawStats({ lives, coins, score, hiScore, stage, time }) {
     const ctx = this.ctx;
     const { width } = CONFIG.view;
     const { barHeight, iconSize, iconGap, labelSize, maxHeartIcons } = CONFIG.hud;
@@ -104,6 +104,7 @@ class Hud {
     this.font.draw(ctx, `X ${String(coins).padStart(2, "0")}`, x, labelY, { size: labelSize });
 
     this.font.draw(ctx, `STAGE ${stage}`, width - 24, labelY, { size: labelSize, align: "right" });
+    this.#drawTime(time, labelY, labelSize);
 
     const scoreY = rowY + iconSize + 12;
     this.font.draw(ctx, `SCORE ${padScore(score)}`, 24, scoreY, { size: 26 });
@@ -145,9 +146,61 @@ class Hud {
     this.#center(text, CONFIG.view.height * 0.34, text.length > 1 ? 68 : 128);
   }
 
-  drawStageBanner(stage, remaining) {
+  /** 남은 시간. 폰트에 색을 입힐 수 없어 막바지에는 깜빡여서 재촉한다. */
+  #drawTime(seconds, y, size) {
+    const left = Math.max(0, Math.ceil(seconds));
+    const hurry = left <= CONFIG.stageTimer.warnRemaining && Math.floor(seconds * 4) % 2 === 0;
+    this.font.draw(this.ctx, `TIME ${String(left).padStart(3, "0")}`, CONFIG.view.width / 2, y, {
+      size,
+      align: "center",
+      alpha: hurry ? 0.35 : 1,
+    });
+  }
+
+  drawStageBanner(stage, name, remaining) {
     const alpha = clamp(remaining / 0.4, 0, 1);
-    this.#center(`STAGE ${stage}`, CONFIG.view.height * 0.24, 60, alpha);
+    this.#center(`STAGE ${stage}`, CONFIG.view.height * 0.2, 60, alpha);
+    this.#center(name, CONFIG.view.height * 0.3, 34, alpha * 0.85);
+  }
+
+  /** 스테이지 진입 화면. 배경 일러스트 위에 어디로 들어가는지 알려준다. */
+  drawStageIntro(stage, name) {
+    const { height } = CONFIG.view;
+    this.#center(`STAGE ${stage}`, height * 0.18, 62);
+    this.#center(name, height * 0.29, 40, 0.9);
+  }
+
+  drawBossBanner(remaining) {
+    const alpha = clamp(remaining / 0.5, 0, 1);
+    this.#center("BOSS", CONFIG.view.height * 0.36, 92, alpha);
+  }
+
+  /** 최종보스 체력. 머리 위 작은 막대 대신 화면 위에 크게 하나만 둔다. */
+  drawBossBar(ratio) {
+    const ctx = this.ctx;
+    const { width } = CONFIG.view;
+    const barWidth = CONFIG.hud.bossBarWidth;
+    const x = (width - barWidth) / 2;
+    const y = CONFIG.hud.barHeight + 26;
+    const height = 14;
+
+    this.font.draw(ctx, "BOSS", width / 2, y - 26, { size: 20, align: "center", alpha: 0.9 });
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(x - 3, y - 3, barWidth + 6, height + 6);
+    ctx.fillStyle = "#e5484d";
+    ctx.fillRect(x, y, barWidth * clamp(ratio, 0, 1), height);
+    ctx.strokeStyle = "rgba(255, 214, 92, 0.85)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 3, y - 3, barWidth + 6, height + 6);
+    ctx.restore();
+  }
+
+  drawStageClear(stage, name) {
+    const { height } = CONFIG.view;
+    this.#center("STAGE CLEAR", height * 0.3, 70);
+    this.#center(`STAGE ${stage}  ${name}`, height * 0.44, 28, 0.85);
   }
 
   /** 컨티뉴 카운트다운. 이 사이에 코인이 들어오면 이어서 시작한다. */

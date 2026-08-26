@@ -41,6 +41,24 @@ async function loadPlayer(manifest) {
   return loadCharacter(manifest.player, durations);
 }
 
+/** @returns {Map<number, HTMLImageElement>} 스테이지 -> 배경 */
+async function loadStageBackgrounds(manifest) {
+  const entries = await Promise.all(
+    Object.entries(manifest.stageBackgrounds ?? {}).map(async ([stage, file]) => [
+      Number(stage),
+      await loadImage(file),
+    ])
+  );
+  return new Map(entries);
+}
+
+async function loadIllustrations(manifest) {
+  const entries = await Promise.all(
+    Object.entries(manifest.illustrations ?? {}).map(async ([name, file]) => [name, await loadImage(file)])
+  );
+  return Object.fromEntries(entries);
+}
+
 async function loadIcons(manifest) {
   const entries = await Promise.all(
     Object.entries(manifest.icons ?? {}).map(async ([name, meta]) => [name, await loadImage(meta.file)])
@@ -65,15 +83,17 @@ async function loadAssets() {
     throw new Error("assets/sprites.js 가 로드되지 않았습니다. build_sprites.py 를 실행하세요.");
   }
 
-  const [background, font, player, icons, enemies] = await Promise.all([
+  const [background, font, player, icons, enemies, stageBackgrounds, illustrations] = await Promise.all([
     loadImage(manifest.background),
     loadFont(manifest.font),
     loadPlayer(manifest),
     loadIcons(manifest),
     loadEnemies(manifest),
+    loadStageBackgrounds(manifest),
+    loadIllustrations(manifest),
   ]);
 
-  return { background, font, player, icons, enemies };
+  return { background, font, player, icons, enemies, stageBackgrounds, illustrations };
 }
 
 async function loadFont(def) {

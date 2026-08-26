@@ -1,9 +1,15 @@
 // 게임 루프와 상태 전이.
 //
-// LOBBY ─ START ─> INTRO -> COUNTDOWN -> PLAYING -> (CONTINUE -> FADEOUT) -> GAMEOVER
-//   │                                                                          │
-//   ├─ RANKING <───────────────── NAME ENTRY <───────────────────────────────────┘
+// LOBBY ─ START ─> INTRO -> COUNTDOWN -> PLAYING ─ 보스 격파 ─> STAGE CLEAR ─┐
+//   │                             ↑                                          │
+//   │                             └────────── 다음 스테이지 ──────────────────┘
+//   │                                  PLAYING ─ 생명 0 · 시간 초과 ─> CONTINUE
+//   │                                                 └ 실패 -> FADEOUT -> GAMEOVER
+//   ├─ RANKING <───────────────── NAME ENTRY <─────────────────────────────────┘
 //   └─ EXIT
+//
+// 스테이지 6(수수께끼 공간)은 보스가 없고, 시간이 다 되거나 쓰러지면
+// 코인을 쓰지 않고 그대로 클리어된다. 그게 마지막 스테이지다.
 
 const GAME_STATE = {
   LOBBY: "lobby",
@@ -12,7 +18,8 @@ const GAME_STATE = {
   INTRO: "intro",
   COUNTDOWN: "countdown",
   PLAYING: "playing",
-  CONTINUE: "continue", // 생명 0. 코인이 들어오면 이어서 시작한다.
+  STAGE_CLEAR: "stageClear",
+  CONTINUE: "continue", // 생명 0 또는 시간 초과. 코인이 들어오면 이어서 시작한다.
   FADEOUT: "fadeout",   // 컨티뉴 실패 후 암전
   GAMEOVER: "gameover",
   NAME_ENTRY: "nameEntry",
@@ -52,27 +59,50 @@ class Game {
     this.state = GAME_STATE.LOBBY;
   }
 
-  /** 새 판을 인트로 상태로 준비한다. */
+  /** 새 판. 스테이지 1 부터 시작한다. */
   #resetGame() {
     this.enemies = [];
     this.pickups = [];
     this.lives = CONFIG.player.startLives;
     this.score = 0;
     this.coins = 0;
-    this.cameraX = 0;
-    this.state = GAME_STATE.INTRO;
-    this.countdownIndex = 0;
-    this.countdownTimer = CONFIG.intro.countdownMs / 1000;
     this.continueTimer = 0;
     this.fadeTimer = 0;
     this.gameOverTimer = 0;
-    this.stageBannerTimer = 0;
-    this.shownStage = 1;
+    this.timeUp = false;
 
-    this.#createPlayer();
-    this.spawner.reset();
     this.sparks.clear();
     this.shake.clear();
+    this.#startStage(1);
+  }
+
+  /** 스테이지 하나를 인트로부터 시작한다. 점수 · 코인 · 생명은 그대로 이어진다. */
+  #startStage(stage) {
+    this.stage = stage;
+    this.stageDef = stageConfig(stage);
+    this.background = this.assets.stageBackgrounds.get(stage) ?? this.assets.background;
+
+    this.enemies.length = 0;
+    this.pickups.length = 0;
+    this.boss = null;
+    this.bossSpawned = false;
+    this.bossBannerTimer = 0;
+    this.stageTimer = this.#stageSeconds();
+    this.stageBannerTimer = 0;
+    this.clearTimer = 0;
+    this.cameraX = 0;
+    this.countdownIndex = 0;
+    this.countdownTimer = CONFIG.intro.countdownMs / 1000;
+    this.state = GAME_STATE.INTRO;
+
+    this.spawner.reset(this.stageDef);
+    this.#createPlayer();
+    this.audio.playBgm(this.stageDef.bgm);
+  }
+
+  #stageSeconds() {
+    const { seconds, endlessSeconds } = CONFIG.stageTimer;
+    return this.stageDef.endless ? endlessSeconds : seconds;
   }
 
   /** 화면 왼쪽 밖에 세워두고 인트로에서 걸어 들어오게 한다. */
@@ -112,6 +142,10 @@ class Game {
       this.#updateGameOver(dt);
       return;
     }
+    if (this.state === GAME_STATE.STAGE_CLEAR) {
+      this.#updateStageClear(dt);
+      return;
+    }
     if (this.state === GAME_STATE.CONTINUE) {
       this.#updateContinue(dt);
       return;
@@ -137,6 +171,7 @@ class Game {
     this.sparks.update(dt);
     this.shake.update(dt);
     if (this.stageBannerTimer > 0) this.stageBannerTimer -= dt;
+    if (this.bossBannerTimer > 0) this.bossBannerTimer -= dt;
   }
 
   /** 로비 · 랭킹 · 종료 · 이름 등록. 이 상태에서는 게임 로직이 돌지 않는다. */
@@ -189,7 +224,6 @@ class Game {
     }
     if (choice === "start") {
       this.#resetGame();
-      this.audio.playBgm("game");
       return;
     }
     if (choice === "ranking") {
@@ -211,7 +245,7 @@ class Game {
     this.ranking.reset();
 
     try {
-      await this.board.submit({ name, score: this.score, stage: this.spawner.stage });
+      await this.board.submit({ name, score: this.score, stage: this.stage });
     } catch {
       /* submit 안에서 이미 폴백까지 처리한다 */
     }
@@ -273,18 +307,96 @@ class Game {
 
     if (this.countdownIndex >= CONFIG.intro.countdown.length) {
       this.state = GAME_STATE.PLAYING;
+      this.stageBannerTimer = CONFIG.hud.stageBannerMs / 1000;
     }
   }
 
   #updatePlaying(dt) {
-    this.audio.playBgm("game");
+    this.audio.playBgm(this.stageDef.bgm);
+
+    this.#updateStageTimer(dt);
+    if (this.state !== GAME_STATE.PLAYING) return; // 시간이 다 되어 상태가 바뀌었다
+
     this.#updateEnemies(dt);
+    if (this.state !== GAME_STATE.PLAYING) return; // 맞고 쓰러졌다
+
     this.#resolveAttack(this.player);
     this.#separateEnemies();
     this.#updatePickups(dt);
     this.#updateSpawning(dt);
 
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
+  }
+
+  /** 제한 시간에서 0 으로. 3분 남는 순간 최종보스가 나오고 0 이 되면 실패한다. */
+  #updateStageTimer(dt) {
+    this.stageTimer -= dt;
+
+    const boss = !this.stageDef.endless && !this.bossSpawned;
+    if (boss && this.stageTimer <= CONFIG.stageTimer.bossAtRemaining) this.#spawnBoss();
+
+    if (this.stageTimer > 0) return;
+    this.stageTimer = 0;
+
+    // 파밍 스테이지는 시간이 다 되는 게 곧 클리어다.
+    if (this.stageDef.endless) {
+      this.#clearStage();
+      return;
+    }
+
+    this.timeUp = true;
+    this.#fail();
+  }
+
+  #spawnBoss() {
+    this.bossSpawned = true;
+
+    const boss = this.spawner.spawnBoss(this.cameraX);
+    if (!boss) return;
+
+    this.boss = boss;
+    this.enemies.push(boss);
+    this.bossBannerTimer = CONFIG.boss.bannerMs / 1000;
+    this.shake.kick(12, 0.45);
+  }
+
+  /** 최종보스를 쓰러뜨렸거나 파밍 스테이지가 끝났다. */
+  #clearStage() {
+    if (this.state === GAME_STATE.STAGE_CLEAR) return;
+
+    this.state = GAME_STATE.STAGE_CLEAR;
+    this.clearTimer = 0;
+    this.boss = null;
+    this.audio.stop("countdown");
+    this.audio.playBgm("clear");
+  }
+
+  /** 잠깐 필드를 보여준 뒤 클리어 연출을 띄우고 다음 스테이지로 넘긴다. */
+  #updateStageClear(dt) {
+    this.clearTimer += dt;
+
+    this.player.update(dt, this.input.pad, false);
+    for (const enemy of this.enemies) enemy.update(dt, this.player);
+    this.enemies = this.enemies.filter((enemy) => !enemy.dead);
+
+    this.sparks.update(dt);
+    this.shake.update(dt);
+    this.#updateCamera(dt);
+
+    const { fieldMs, illustMs } = CONFIG.stageClear;
+    if (this.clearTimer * 1000 < fieldMs + illustMs) return;
+
+    this.#advanceStage();
+  }
+
+  /** 마지막 스테이지까지 끝냈으면 암전 후 게임 오버로 마무리한다. */
+  #advanceStage() {
+    if (this.stage >= CONFIG.stages.length) {
+      this.state = GAME_STATE.FADEOUT;
+      this.fadeTimer = 0;
+      return;
+    }
+    this.#startStage(this.stage + 1);
   }
 
   #updateEnemies(dt) {
@@ -305,10 +417,19 @@ class Game {
     }
   }
 
-  /** 생명이 다 떨어졌을 때. 코인이 있으면 바로, 없으면 카운트다운을 띄운다. */
+  /** 생명이 다 떨어졌을 때. 파밍 스테이지에서는 쓰러져도 코인 없이 클리어된다. */
   #onPlayerDown() {
     this.lives = 0;
 
+    if (this.stageDef.endless) {
+      this.#clearStage();
+      return;
+    }
+    this.#fail();
+  }
+
+  /** 코인이 있으면 바로 이어가고, 없으면 컨티뉴 카운트다운을 띄운다. */
+  #fail() {
     if (this.coins > 0) {
       this.#spendCoinAndResume();
       return;
@@ -330,6 +451,17 @@ class Game {
 
     this.audio.stop("countdown");
     this.enemies.length = 0; // 부활하자마자 둘러싸이지 않도록 정리
+
+    // 같이 지워진 보스는 조건이 맞으면 다음 프레임에 다시 나온다.
+    this.boss = null;
+    this.bossSpawned = false;
+
+    // 시간이 다 되어 실패한 거라면 시계도 되돌린다. 안 그러면 이어가자마자 또 끝난다.
+    if (this.timeUp) {
+      this.timeUp = false;
+      this.stageTimer = this.#stageSeconds();
+    }
+
     this.spawner.timer = CONFIG.spawn.firstDelay / 1000;
     this.state = GAME_STATE.PLAYING;
   }
@@ -350,8 +482,9 @@ class Game {
 
       if (killed && !enemy.scoreGiven) {
         enemy.scoreGiven = true;
-        this.#addScore(enemy.stats.score);
+        this.#addScore(enemy.score);
         this.#maybeDrop(enemy);
+        if (enemy.boss) this.#clearStage();
       }
     }
   }
@@ -398,18 +531,10 @@ class Game {
   }
 
   #updateSpawning(dt) {
-    const alive = this.enemies.filter((enemy) => !enemy.isDying).length;
-    const spawned = this.spawner.update(dt, {
-      score: this.score,
-      cameraX: this.cameraX,
-      aliveCount: alive,
-    });
+    // 보스는 머릿수에 넣지 않는다. 넣으면 보스 하나로 자리가 차서 잡몹이 끊긴다.
+    const alive = this.enemies.filter((enemy) => !enemy.isDying && !enemy.boss).length;
+    const spawned = this.spawner.update(dt, { cameraX: this.cameraX, aliveCount: alive });
     if (spawned) this.enemies.push(spawned);
-
-    if (this.spawner.stage > this.shownStage) {
-      this.shownStage = this.spawner.stage;
-      this.stageBannerTimer = CONFIG.hud.stageBannerMs / 1000;
-    }
   }
 
   #addScore(amount) {
@@ -455,7 +580,7 @@ class Game {
     const last = Math.min(CONFIG.world.tiles - 1, Math.floor((this.cameraX + width) / this.bgTileWidth));
 
     for (let i = first; i <= last; i += 1) {
-      ctx.drawImage(this.assets.background, i * this.bgTileWidth - this.cameraX, 0, this.bgTileWidth, height);
+      ctx.drawImage(this.background, i * this.bgTileWidth - this.cameraX, 0, this.bgTileWidth, height);
     }
   }
 
@@ -485,12 +610,12 @@ class Game {
     }
 
     if (this.state === GAME_STATE.NAME_ENTRY) {
-      this.nameEntry.draw(this.score, this.spawner.stage);
+      this.nameEntry.draw(this.score, this.stage);
       return;
     }
 
     if (this.state === GAME_STATE.INTRO) {
-      this.hud.drawTitle();
+      this.hud.drawStageIntro(this.stage, this.stageDef.name);
       this.hud.drawControls();
       return;
     }
@@ -500,8 +625,11 @@ class Game {
       coins: this.coins,
       score: this.score,
       hiScore: this.hiScore,
-      stage: this.spawner.stage,
+      stage: this.stage,
+      time: this.stageTimer,
     });
+
+    if (this.boss && !this.boss.dead) this.hud.drawBossBar(this.boss.hp / this.boss.maxHp);
 
     if (this.state === GAME_STATE.COUNTDOWN) {
       this.hud.drawCountdown(CONFIG.intro.countdown[this.countdownIndex]);
@@ -510,7 +638,17 @@ class Game {
     }
 
     if (this.stageBannerTimer > 0) {
-      this.hud.drawStageBanner(this.spawner.stage, this.stageBannerTimer);
+      this.hud.drawStageBanner(this.stage, this.stageDef.name, this.stageBannerTimer);
+    }
+    if (this.bossBannerTimer > 0) {
+      this.hud.drawBossBanner(this.bossBannerTimer);
+    }
+
+    if (this.state === GAME_STATE.STAGE_CLEAR) {
+      if (this.clearTimer * 1000 >= CONFIG.stageClear.fieldMs) {
+        this.hud.drawStageClear(this.stage, this.stageDef.name);
+      }
+      return;
     }
 
     if (this.state === GAME_STATE.CONTINUE) {

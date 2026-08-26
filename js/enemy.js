@@ -9,18 +9,21 @@ const ENEMY_STAGGER_MS = 160;
 const ENEMY_DEPTH_TOLERANCE = 26;
 
 class Enemy extends Actor {
-  constructor(anims, stats, x, y) {
+  /** @param {boolean} options.boss  최종보스면 체력과 크기를 키운다 */
+  constructor(anims, stats, x, y, { boss = false } = {}) {
     const animator = new Animator(anims);
     animator.play("move");
 
+    const sizeUp = boss ? CONFIG.boss.scaleMultiplier : 1;
     super({
       x,
       y,
       animator,
-      maxHp: stats.hp,
-      bodyWidth: animator.sheet.frameWidth * 0.26,
+      maxHp: boss ? Math.round(stats.hp * CONFIG.boss.hpMultiplier) : stats.hp,
+      bodyWidth: animator.sheet.frameWidth * 0.26 * sizeUp,
     });
 
+    this.boss = boss;
     this.stats = stats;
     this.state = ENEMY_STATE.APPROACH;
     this.timer = 0;
@@ -30,7 +33,15 @@ class Enemy extends Actor {
   }
 
   get scale() {
-    return depthScale(this.y) * this.stats.scale;
+    return depthScale(this.y) * this.stats.scale * (this.boss ? CONFIG.boss.scaleMultiplier : 1);
+  }
+
+  get speed() {
+    return this.stats.speed * (this.boss ? CONFIG.boss.speedMultiplier : 1);
+  }
+
+  get score() {
+    return Math.round(this.stats.score * (this.boss ? CONFIG.boss.scoreMultiplier : 1));
   }
 
   get isDying() {
@@ -88,7 +99,7 @@ class Enemy extends Actor {
     }
 
     // 깊이를 먼저 맞추고 옆으로 붙는다. 그래야 가로로만 겹치는 상황이 줄어든다.
-    const speed = this.stats.speed;
+    const speed = this.speed;
     const distance = Math.hypot(dx, dy) || 1;
     this.x += (dx / distance) * speed * dt;
     this.y += (dy / distance) * speed * 0.55 * dt;
@@ -141,8 +152,9 @@ class Enemy extends Actor {
     ctx.restore();
   }
 
+  /** 최종보스는 화면 위에 큰 게이지가 따로 뜨므로 머리 위에는 그리지 않는다. */
   #drawHealthBar(ctx, screenX, scale) {
-    if (this.hp >= this.maxHp) return;
+    if (this.boss || this.hp >= this.maxHp) return;
 
     const width = 46 * scale;
     const height = 5;
