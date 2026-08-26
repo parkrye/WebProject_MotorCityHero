@@ -145,8 +145,8 @@ class Hud {
 
   drawTitle() {
     const { height } = CONFIG.view;
-    this.#center("DONALD FURY 2088", height * 0.2, 64);
-    this.#center("TEXAS TO THE MOON", height * 0.32, 40);
+    this.#center("MOTOR CITY HERO", height * 0.2, 64);
+    this.#center("BLOOD SWEAT AND COINS", height * 0.32, 40);
   }
 
   /** 하단 조작 안내. */

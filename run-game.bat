@@ -2,7 +2,7 @@
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
-title 도날드 퓨리 2088 - 로컬 서버
+title 모터시티 히어로 - 로컬 서버
 
 rem py 런처를 우선 쓰고, 없으면 python 을 찾는다.
 set "PYCMD="
