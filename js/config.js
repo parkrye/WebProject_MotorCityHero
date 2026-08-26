@@ -113,15 +113,37 @@ const CONFIG = {
   // 에너미 능력치. 스테이지가 아니라 "몇 번 에너미인지" 기준이다.
   // hp 는 플레이어 공격력(12) 기준 "몇 대 맞아야 죽는지"로 잡았다.
   // 반대로 플레이어는 무엇에 맞든 한 대 = 생명 1 이라 에너미 쪽 damage 는 없다.
+  // behavior 는 다가오는 방식, knockbackResist 는 맞고 밀리는 정도(1 이면 안 밀린다).
   enemies: [
-    { id: 1, hp: 10, speed: 96,  score: 60,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72 },
-    { id: 2, hp: 20, speed: 86,  score: 90,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80 },
-    { id: 3, hp: 32, speed: 102, score: 130, attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84 },
-    { id: 4, hp: 44, speed: 92,  score: 180, attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96 },
-    { id: 5, hp: 56, speed: 112, score: 240, attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88 },
-    { id: 6, hp: 68, speed: 100, score: 310, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98 },
-    { id: 7, hp: 82, speed: 108, score: 390, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94 },
+    { id: 1, hp: 10, speed: 88,  score: 60,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72,
+      behavior: "dash",      knockbackResist: 0 },
+    { id: 2, hp: 20, speed: 86,  score: 90,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80,
+      behavior: "straight",  knockbackResist: 0.1 },
+    { id: 3, hp: 32, speed: 102, score: 130, attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84,
+      behavior: "zigzag",    knockbackResist: 0.15 },
+    { id: 4, hp: 44, speed: 76,  score: 180, attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96,
+      behavior: "straight",  knockbackResist: 0.55 },
+    { id: 5, hp: 56, speed: 118, score: 240, attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88,
+      behavior: "hitAndRun", knockbackResist: 0.1 },
+    { id: 6, hp: 68, speed: 100, score: 310, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98,
+      behavior: "flank",     knockbackResist: 0.3 },
+    { id: 7, hp: 82, speed: 108, score: 390, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94,
+      behavior: "stalk",     knockbackResist: 0.45 },
   ],
+
+  // 이동 규칙별 수치. 체력만 불리는 대신 성격을 다르게 준다.
+  enemyBehavior: {
+    // 깊이축으로 물결치며 붙는다. 정면으로만 서 있으면 잘 안 맞는다.
+    zigzag: { frequency: 2.4, amplitude: 78 },
+    // 플레이어의 등 뒤를 노린다. 사거리보다 짧게 잡아야 돌아 들어오면서 때린다.
+    flank: { behind: 46 },
+    // 멈췄다 짧게 치고 들어온다.
+    dash: { moveMs: 620, restMs: 420, boost: 2.2 },
+    // 한 번 때리면 물러났다가 다시 붙는다.
+    hitAndRun: { retreatMs: 900, boost: 1.4 },
+    // 사거리 밖을 맴돌다 이따금 파고든다.
+    stalk: { orbit: 190, waitMs: 2200, lungeMs: 760, boost: 2.4 },
+  },
 
   // 스테이지 구성. major 가 다수, minor 가 소수, boss 가 최종보스다.
   // 이름은 비트맵 폰트에 있는 글자(A-Z · 0-9 · 공백)로만 쓴다.
