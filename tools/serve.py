@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""모터시티 히어로 로컬 서버.
+"""도날드 퓨리 2088 로컬 서버.
 
 프로젝트 루트를 정적으로 서빙한다. 기본으로 0.0.0.0 에 바인딩해서 같은 공유기에
 물린 다른 기기(폰 · 노트북)에서도 접속할 수 있게 연다. 표준 라이브러리만 쓴다.
@@ -293,7 +293,7 @@ def print_banner(host: str, port: int) -> None:
     line = "=" * 52
     print()
     print(line)
-    print("  모터시티 히어로 : 미스터 D")
+    print("  도날드 퓨리 2088")
     print(line)
     print("  이 PC      http://localhost:%d" % port)
     if host != "127.0.0.1":
@@ -310,7 +310,7 @@ def print_banner(host: str, port: int) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="모터시티 히어로 로컬 서버")
+    parser = argparse.ArgumentParser(description="도날드 퓨리 2088 로컬 서버")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="사용할 포트 (기본 %d, 점유 중이면 다음 포트로 이동)" % DEFAULT_PORT)
     parser.add_argument("--local-only", action="store_true",

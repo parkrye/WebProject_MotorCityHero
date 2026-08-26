@@ -1,6 +1,7 @@
 // 생명 / 코인 / 점수 표시와 인트로 · 컨티뉴 · 게임오버 오버레이.
 // 모든 글자는 비트맵 폰트(A-Z, 0-9)로 그린다. 하이픈과 콜론이 없어 공백으로 대신한다.
 
+// 게임 이름이 바뀌어도 그대로 둔다. 키를 바꾸면 기존 최고 점수가 날아간다.
 const HI_SCORE_KEY = "motorCityHero.hiScore";
 
 function loadHiScore() {
@@ -141,8 +142,8 @@ class Hud {
 
   drawTitle() {
     const { height } = CONFIG.view;
-    this.#center("MOTOR CITY HERO", height * 0.2, 64);
-    this.#center("MISTER D", height * 0.32, 40);
+    this.#center("DONALD FURY 2088", height * 0.2, 64);
+    this.#center("TEXAS TO THE MOON", height * 0.32, 40);
   }
 
   /** 하단 조작 안내. */
