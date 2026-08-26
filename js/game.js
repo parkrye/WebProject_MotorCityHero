@@ -99,6 +99,8 @@ class Game {
     this.clearLines = [];
     this.stageBannerTimer = 0;
     this.clearTimer = 0;
+    this.resultTimer = 0;
+    this.clearStamps = 0; // 결과 화면에서 지금까지 찍힌 줄 수
     this.introLeadTimer = CONFIG.intro.leadMs / 1000;
     this.cameraX = 0;
     this.countdownIndex = 0;
@@ -192,6 +194,9 @@ class Game {
       this.coins += 1;
       this.audio.play("coin");
     }
+
+    // 클리어 결과는 한 줄씩 찍힌다. 어느 상태에서 띄우든(스테이지 클리어 · 암전) 같이 돈다.
+    this.#updateClearStamps(dt);
 
     if (this.state === GAME_STATE.GAMEOVER) {
       this.#updateGameOver(dt);
@@ -344,6 +349,7 @@ class Game {
   }
 
   #updateFadeOut(dt) {
+    this.shake.update(dt); // 결과 도장의 잔여 흔들림이 암전 중에 멎도록
     this.fadeTimer += dt;
     if (this.fadeTimer < CONFIG.continue.fadeMs / 1000) return;
 
@@ -421,7 +427,10 @@ class Game {
 
     this.state = GAME_STATE.STAGE_CLEAR;
     this.clearTimer = 0;
+    this.resultTimer = 0;
+    this.clearStamps = 0;
     this.boss = null;
+    this.player.celebrate();
     this.audio.stop("countdown");
     this.audio.playBgm("clear");
     this.#awardClearBonus();
@@ -462,6 +471,29 @@ class Game {
     if (this.clearTimer * 1000 < fieldMs + resultMs) return;
 
     this.#advanceStage();
+  }
+
+  /**
+   * 결과 줄을 하나씩 "쾅" 찍는다. 한 줄이 새로 찍힐 때마다 소리와 흔들림을 준다.
+   * 마지막 한 번은 TOTAL 이라 더 세게 찍는다.
+   */
+  #updateClearStamps(dt) {
+    if (!this.showingClearResult) {
+      this.resultTimer = 0;
+      return;
+    }
+
+    this.resultTimer += dt;
+    const { stampIntervalMs, stampShake, stampShakeFinal } = CONFIG.stageClear;
+    const total = this.clearLines.length + 1; // 보너스 줄 + TOTAL
+    const landed = clamp(Math.floor((this.resultTimer * 1000) / stampIntervalMs) + 1, 0, total);
+
+    while (this.clearStamps < landed) {
+      this.clearStamps += 1;
+      const last = this.clearStamps === total;
+      this.audio.play(last ? "coin" : "button");
+      this.shake.kick(last ? stampShakeFinal : stampShake, last ? 0.3 : 0.16);
+    }
   }
 
   /** 마지막 스테이지까지 끝냈으면 암전 후 게임 오버로 마무리한다. */
@@ -719,6 +751,8 @@ class Game {
   }
 
   #drawOverlay() {
+    const ctx = this.ctx;
+
     if (this.state === GAME_STATE.LOBBY) {
       this.hud.drawLobbyBackdrop();
       this.hud.drawTitle();
@@ -750,10 +784,16 @@ class Game {
 
     // 클리어 결과 위에는 HUD 를 얹지 않는다. 연출만 보여준다.
     if (this.showingClearResult) {
+      // 도장이 찍힐 때 결과 글자도 같이 흔들려야 "쾅" 하고 박히는 느낌이 난다.
+      const shake = this.shake.offset;
+      ctx.save();
+      ctx.translate(shake.x, shake.y);
       this.hud.drawStageClear(this.stage, this.stageDef.name, this.clearLines, this.score, {
         final: this.isFinalStage,
         dim: !this.showingClearArt, // 일러스트가 아니라 필드 위라면 글자가 묻히지 않게 깔아준다
+        elapsed: this.resultTimer * 1000,
       });
+      ctx.restore();
       if (this.state === GAME_STATE.FADEOUT) {
         this.hud.drawFade(this.fadeTimer / (CONFIG.continue.fadeMs / 1000));
       }

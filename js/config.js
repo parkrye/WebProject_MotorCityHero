@@ -19,7 +19,8 @@ const CONFIG = {
 
   camera: {
     // 플레이어를 화면 이 비율 지점에 두려고 따라간다.
-    anchorRatio: 1 / 3,
+    // 0.5 = 가운데. 맵 좌우 끝에서는 아래 clamp 가 걸려 화면 밖이 보이지 않는다.
+    anchorRatio: 0.5,
     lerp: 6,
   },
 
@@ -51,6 +52,7 @@ const CONFIG = {
     continueGraceMs: 1200, // 컨티뉴 직후 잠깐 무적
     idleFrameDuration: 120,
     walkFrameDuration: 100,
+    clearFrameDuration: 110, // 스테이지 클리어 승리 모션
   },
 
   // 선입력. 낼 수 없는 타이밍에 누른 공격을 잠깐 기억해 두었다가,
@@ -244,7 +246,13 @@ const CONFIG = {
   // 마지막 스테이지를 끝냈을 때만 클리어 일러스트로 화면을 덮는다.
   stageClear: {
     fieldMs: 900,   // 보스가 쓰러지는 걸 보여주는 시간
-    resultMs: 2600, // 그다음 결과 화면을 띄우는 시간
+    resultMs: 3200, // 그다음 결과 화면을 띄우는 시간. 아래 도장이 다 찍히고도 남게 잡는다
+    // 점수를 한 줄씩 "쾅 쾅 쾅" 찍는다. 마지막 한 번은 TOTAL 이다.
+    stampIntervalMs: 360, // 한 줄과 다음 줄 사이
+    stampPunchMs: 190,    // 크게 들어왔다가 제자리로 줄어드는 시간
+    stampScale: 0.85,     // 찍히는 순간 이 비율만큼 더 크다
+    stampShake: 8,
+    stampShakeFinal: 16,  // TOTAL 은 더 세게
   },
 
   spawn: {

@@ -105,7 +105,8 @@ LOBBY      타이틀 + GAME START / RANKING / EXIT + 소리·화면 토글
 게임은 **반드시 게임 오버로 끝나고**, 끝나면 항상 이름 등록 화면이 나옵니다.
 스테이지 6까지 다 깨도 마찬가지로 이름을 넣고 랭킹으로 갑니다.
 
-- 스테이지는 배경을 가로 3타일 반복해 만든 폭 3072 월드이며, 카메라가 플레이어를 따라 좌→우로 흐릅니다.
+- 스테이지는 배경을 가로 3타일 반복해 만든 폭 3072 월드이며, 카메라가 플레이어를 **화면 가운데**에
+  두고 따라갑니다 (`CONFIG.camera.anchorRatio`). 맵 좌우 끝에서는 화면 밖이 보이지 않도록 멈춥니다.
 - 상하 이동은 도로 영역으로 제한되고, 안쪽(위)일수록 캐릭터가 작게 그려집니다 (벨트스크롤 원근).
 - 발끝 y 기준으로 정렬해 앞뒤 겹침을 처리합니다.
 
@@ -202,7 +203,12 @@ LOBBY      타이틀 + GAME START / RANKING / EXIT + 소리·화면 토글
 
 클리어 화면에 이번 스테이지에서 번 내역이 그대로 뜹니다. 1~5 스테이지는 그 스테이지 배경 위에
 `STAGE CLEAR` 와 내역만 얹고, **마지막 스테이지(6)를 끝냈을 때만** `illust_clear.png` 로 화면을
-덮고 `GAME CLEAR` 를 띄웁니다.
+덮고 `GAME CLEAR` 를 띄웁니다. 보스를 쓰러뜨린 플레이어는 그동안 **승리 모션**을 돌립니다
+(`player_clear` 애니메이션. 없으면 그냥 서 있습니다).
+
+내역은 한꺼번에 뜨지 않고 **한 줄씩 쾅 하고 박힙니다.** 줄마다 `CONFIG.stageClear.stampIntervalMs`
+간격으로 크게 들어왔다가 제자리 크기로 줄고, 그때마다 효과음과 화면 흔들림이 붙습니다.
+맨 마지막 `TOTAL` 은 더 세게 찍습니다.
 
 ### 랭킹
 
@@ -357,6 +363,7 @@ data/scores.json     랭킹 기록 (서버가 씀)
 ```
 <원본>/player_idle.gif  player_walk.gif  player_attack.gif  player_hit.gif
 <원본>/player_kick.gif  player_clear.gif      (선택. 없으면 게임이 attack / idle 로 대체)
+                       player_victory.gif    (player_clear.gif 의 별칭. 둘 중 아무 이름이나 된다)
 <원본>/game_bg.png                            스테이지 2(디트로이트) 배경
 <원본>/bg_stage1.png ... bg_stage6.png        없는 번호는 game_bg 로 남는다
 <원본>/illust_clear.png                       게임 클리어(마지막 스테이지) 연출 일러스트
