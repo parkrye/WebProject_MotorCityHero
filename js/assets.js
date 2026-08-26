@@ -34,6 +34,7 @@ async function loadPlayer(manifest) {
     idle: idleFrameDuration,
     walk: walkFrameDuration,
     attack: attack.frameDuration,
+    kick: attack.frameDuration,
     hit: hit.frameDuration,
   };
 

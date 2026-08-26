@@ -1,5 +1,6 @@
-// 플레이어. WASD 로 움직이고 J 로 때린다.
+// 플레이어. WASD 로 움직이고 J 로 펀치, K 로 킥을 낸다.
 // 상태: idle / walk / attack / hit. 공격과 피격 중에는 이동 입력을 받지 않는다.
+// 펀치와 킥은 재생하는 시트만 다르고 상태·판정·대미지는 완전히 같다.
 // 생명은 Game 이 들고 있고, 여기서는 "맞았다"까지만 판단한다.
 
 const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
@@ -16,6 +17,8 @@ class Player extends Actor {
     });
 
     this.audio = audio;
+    // 킥 시트가 아직 없는 빌드에서는 펀치 모션으로 대신 낸다.
+    this.kickAnim = anims.kick ? "kick" : PLAYER_STATE.ATTACK;
 
     this.state = PLAYER_STATE.IDLE;
     this.downed = false;      // 생명이 0 이 되어 쓰러진 상태. 마지막 프레임을 유지한다.
@@ -91,9 +94,9 @@ class Player extends Actor {
   }
 
   #updateControl(dt, pad) {
-    if (pad.justPressed("action") && this.recoveryTimer <= 0) {
-      this.#startAttack();
-      return;
+    if (this.recoveryTimer <= 0) {
+      if (pad.justPressed("action")) return this.#startAttack(PLAYER_STATE.ATTACK);
+      if (pad.justPressed("kick")) return this.#startAttack(this.kickAnim);
     }
 
     const move = pad.moveVector();
@@ -111,11 +114,12 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.WALK);
   }
 
-  #startAttack() {
+  /** @param {string} anim  재생할 시트 이름. 판정은 어느 쪽이든 같다. */
+  #startAttack(anim) {
     this.audio?.play("attack");
     this.state = PLAYER_STATE.ATTACK;
     this.hitThisSwing.clear();
-    this.animator.play(PLAYER_STATE.ATTACK, { loop: false, restart: true });
+    this.animator.play(anim, { loop: false, restart: true });
   }
 
   #enterState(state) {

@@ -2,7 +2,8 @@
 //
 // 이 게임이 받는 키는 아래가 전부다. 마우스와 나머지 키는 전부 무시한다.
 //   이동        : W A S D
-//   공격 · 확인 : J
+//   펀치 · 확인 : J
+//   킥          : K
 //   코인 투입   : P
 //
 // 판정은 event.code 기준이라 NumLock 상태와 무관하고,
@@ -13,8 +14,9 @@ const KEY_MAP = {
   KeyS: "down",
   KeyA: "left",
   KeyD: "right",
-  KeyJ: "action",
-  KeyP: "coin", // 오락실 코인 투입 흉내
+  KeyJ: "action", // 펀치. 화면에서는 확인키로도 쓴다
+  KeyK: "kick",
+  KeyP: "coin",   // 오락실 코인 투입 흉내
 };
 
 /** 눌림 상태. 키보드와 (모바일) 터치 조이패드가 같은 창구를 쓴다. */

@@ -118,7 +118,7 @@ class Hud {
 
   /** 하단 조작 안내. */
   drawControls() {
-    this.#center("WASD MOVE    J ACTION    P COIN", CONFIG.view.height - 54, 20, 0.8);
+    this.#center("WASD MOVE    J PUNCH    K KICK    P COIN", CONFIG.view.height - 54, 20, 0.8);
   }
 
   /** 로비에서 배경 위에 깔아 글자가 묻히지 않게 하는 어둡기. */

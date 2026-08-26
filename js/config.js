@@ -28,6 +28,7 @@ const CONFIG = {
     shadowColor: "#3a0f10", // 발밑 그림자
     speedX: 265,
     speedY: 155, // 깊이축은 느리게 (고전 벨트스크롤 감각)
+    // 킥은 모션만 다르고 판정 · 대미지 · 사거리는 펀치와 똑같다. 그래서 표를 나누지 않는다.
     attack: {
       frameDuration: 60,
       damage: 12,
