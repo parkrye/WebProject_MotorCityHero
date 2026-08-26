@@ -128,19 +128,19 @@ const CONFIG = {
   // 반대로 플레이어는 무엇에 맞든 한 대 = 생명 1 이라 에너미 쪽 damage 는 없다.
   // behavior 는 다가오는 방식, knockbackResist 는 맞고 밀리는 정도(1 이면 안 밀린다).
   enemies: [
-    { id: 1, hp: 10, speed: 88,  score: 60,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72,
+    { id: 1, hp: 10, speed: 88,  score: 20,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72,
       behavior: "dash",      knockbackResist: 0 },
-    { id: 2, hp: 20, speed: 86,  score: 90,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80,
+    { id: 2, hp: 20, speed: 86,  score: 30,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80,
       behavior: "straight",  knockbackResist: 0.1 },
-    { id: 3, hp: 32, speed: 102, score: 130, attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84,
+    { id: 3, hp: 32, speed: 102, score: 45,  attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84,
       behavior: "zigzag",    knockbackResist: 0.15 },
-    { id: 4, hp: 44, speed: 76,  score: 180, attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96,
+    { id: 4, hp: 44, speed: 76,  score: 60,  attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96,
       behavior: "straight",  knockbackResist: 0.55 },
-    { id: 5, hp: 56, speed: 118, score: 240, attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88,
+    { id: 5, hp: 56, speed: 118, score: 80,  attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88,
       behavior: "hitAndRun", knockbackResist: 0.1 },
-    { id: 6, hp: 68, speed: 100, score: 310, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98,
+    { id: 6, hp: 68, speed: 100, score: 105, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98,
       behavior: "flank",     knockbackResist: 0.3 },
-    { id: 7, hp: 82, speed: 108, score: 390, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94,
+    { id: 7, hp: 82, speed: 108, score: 135, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94,
       behavior: "stalk",     knockbackResist: 0.45 },
   ],
 
@@ -156,6 +156,18 @@ const CONFIG = {
     hitAndRun: { retreatMs: 900, boost: 1.4 },
     // 사거리 밖을 맴돌다 이따금 파고든다.
     stalk: { orbit: 190, waitMs: 2200, lungeMs: 760, boost: 2.4 },
+  },
+
+  // 점수. 처치로 버는 건 자잘하고, 대부분은 스테이지를 끝내는 데서 나온다.
+  // 여섯 스테이지를 한 번도 맞지 않고 코인도 안 쓰고 끝내야 겨우 만점에 닿는다.
+  score: {
+    // 인덱스 = 스테이지 - 1. 스테이지 6(파밍)은 클리어 · 시간 보너스가 없다.
+    stageClear: [40000, 56000, 72000, 92000, 116000, 0],
+    timePerSecond: [200, 250, 300, 350, 420, 0],
+    noHit: [20000, 26000, 32000, 38000, 46000, 24000],
+    farmKillMultiplier: 12, // 파밍 스테이지에서만 처치 점수를 크게 쳐준다
+    noContinue: 120000,     // 코인을 한 번도 쓰지 않고 끝까지 갔을 때
+    max: 999999,            // 표시가 여섯 자리라 여기서 멈춘다
   },
 
   // 스테이지 구성. major 가 다수, minor 가 소수, boss 가 최종보스다.

@@ -71,6 +71,7 @@ class Game {
     this.gameOverTimer = 0;
     this.timeUp = false;
     this.finalClear = false;
+    this.usedContinue = false;
 
     this.sparks.clear();
     this.shake.clear();
@@ -89,6 +90,8 @@ class Game {
     this.bossSpawned = false;
     this.bossBannerTimer = 0;
     this.stageTimer = this.#stageSeconds();
+    this.stageHit = false; // 이 스테이지에서 한 대라도 맞았는지. 노히트 보너스 판정용
+    this.clearLines = [];
     this.stageBannerTimer = 0;
     this.clearTimer = 0;
     this.introLeadTimer = CONFIG.intro.illustMs / 1000;
@@ -395,6 +398,26 @@ class Game {
     this.boss = null;
     this.audio.stop("countdown");
     this.audio.playBgm("clear");
+    this.#awardClearBonus();
+  }
+
+  /** 클리어 보너스. 화면에 그대로 띄울 내역으로 남긴다. */
+  #awardClearBonus() {
+    const { stageClear, timePerSecond, noHit, noContinue } = CONFIG.score;
+    const index = this.stage - 1;
+    const last = this.stage >= CONFIG.stages.length;
+
+    const lines = [
+      { label: "STAGE BONUS", value: stageClear[index] ?? 0 },
+      { label: "TIME BONUS", value: Math.floor(this.stageTimer) * (timePerSecond[index] ?? 0) },
+      { label: "NO DAMAGE", value: this.stageHit ? 0 : noHit[index] ?? 0 },
+    ];
+    if (last && !this.usedContinue) {
+      lines.push({ label: "NO CONTINUE", value: noContinue });
+    }
+
+    this.clearLines = lines.filter((line) => line.value > 0);
+    for (const line of this.clearLines) this.#addScore(line.value);
   }
 
   /** 잠깐 필드를 보여준 뒤 클리어 연출을 띄우고 다음 스테이지로 넘긴다. */
@@ -442,6 +465,7 @@ class Game {
       if (!player.takeDamage(enemy.x)) continue;
 
       this.lives -= 1;
+      this.stageHit = true;
       this.audio.play("hit");
       this.shake.kick(9, 0.22);
       this.sparks.burst(player.x, player.y - 90 * player.scale, -enemy.facing, 1);
@@ -482,6 +506,7 @@ class Game {
   /** 점수와 스테이지는 그대로 두고 생명만 채워 그 자리에서 이어간다. */
   #spendCoinAndResume() {
     this.coins -= 1;
+    this.usedContinue = true;
     this.lives = CONFIG.player.startLives;
     this.player.revive();
 
@@ -518,7 +543,7 @@ class Game {
 
       if (killed && !enemy.scoreGiven) {
         enemy.scoreGiven = true;
-        this.#addScore(enemy.score);
+        this.#addScore(this.#killScore(enemy));
         this.#maybeDrop(enemy);
         if (enemy.boss) this.#clearStage();
       }
@@ -589,8 +614,14 @@ class Game {
     if (spawned) this.enemies.push(spawned);
   }
 
+  /** 파밍 스테이지에서만 처치 점수를 크게 쳐준다. */
+  #killScore(enemy) {
+    const multiplier = this.stageDef.endless ? CONFIG.score.farmKillMultiplier : 1;
+    return enemy.score * multiplier;
+  }
+
   #addScore(amount) {
-    this.score += amount;
+    this.score = Math.min(CONFIG.score.max, this.score + amount);
     if (this.score > this.hiScore) this.hiScore = this.score;
   }
 
@@ -691,7 +722,7 @@ class Game {
 
     // 클리어 일러스트 위에는 HUD 를 얹지 않는다. 연출만 보여준다.
     if (this.showingClearArt) {
-      this.hud.drawStageClear(this.stage, this.stageDef.name, this.score);
+      this.hud.drawStageClear(this.stage, this.stageDef.name, this.clearLines, this.score);
       if (this.state === GAME_STATE.FADEOUT) {
         this.hud.drawFade(this.fadeTimer / (CONFIG.continue.fadeMs / 1000));
       }

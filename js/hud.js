@@ -216,11 +216,24 @@ class Hud {
     ctx.restore();
   }
 
-  drawStageClear(stage, name, score) {
-    const { height } = CONFIG.view;
-    this.#center("STAGE CLEAR", height * 0.26, 70);
-    this.#center(`STAGE ${stage}  ${name}`, height * 0.4, 28, 0.85);
-    this.#center(`SCORE ${padScore(score)}`, height * 0.52, 32, 0.9);
+  /** @param {{label: string, value: number}[]} lines  이번 스테이지에서 번 점수 내역 */
+  drawStageClear(stage, name, lines, total) {
+    const ctx = this.ctx;
+    const { width, height } = CONFIG.view;
+    const half = 220;
+
+    this.#center("STAGE CLEAR", height * 0.16, 64);
+    this.#center(`STAGE ${stage}  ${name}`, height * 0.28, 26, 0.85);
+
+    let y = height * 0.42;
+    for (const { label, value } of lines) {
+      this.font.draw(ctx, label, width / 2 - half, y, { size: 23, alpha: 0.85 });
+      this.font.draw(ctx, padScore(value), width / 2 + half, y, { size: 23, align: "right", alpha: 0.85 });
+      y += 36;
+    }
+
+    this.font.draw(ctx, "TOTAL", width / 2 - half, y + 16, { size: 30 });
+    this.font.draw(ctx, padScore(total), width / 2 + half, y + 16, { size: 30, align: "right" });
   }
 
   /** 컨티뉴 카운트다운. 이 사이에 코인이 들어오면 이어서 시작한다. */
