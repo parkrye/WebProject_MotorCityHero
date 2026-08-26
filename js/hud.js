@@ -62,6 +62,7 @@ class Hud {
     this.ctx = ctx;
     this.font = font;
     this.icons = icons;
+    this.touch = false; // 터치 기기면 안내 문구를 그쪽 버튼 이름으로 바꾼다
   }
 
   /** 아이콘을 높이 기준으로 그리고 차지한 폭을 돌려준다. */
@@ -138,7 +139,10 @@ class Hud {
 
   /** 하단 조작 안내. */
   drawControls() {
-    this.#center("WASD MOVE    J PUNCH    K KICK    P COIN", CONFIG.view.height - 54, 20, 0.8);
+    const text = this.touch
+      ? "STICK MOVE    A PUNCH    B KICK    P COIN"
+      : "WASD MOVE    J PUNCH    K KICK    P COIN";
+    this.#center(text, CONFIG.view.height - 54, 20, 0.8);
   }
 
   /** 로비에서 배경 위에 깔아 글자가 묻히지 않게 하는 어둡기. */
@@ -158,7 +162,7 @@ class Hud {
     this.drawFade(1);
     this.#center("THANK YOU FOR PLAYING", height * 0.36, 52);
     this.#center("CLOSE THIS TAB TO QUIT", height * 0.52, 24, 0.7);
-    this.#center("PRESS ACTION TO GO BACK", height * 0.66, 22, 0.5);
+    this.#center(this.touch ? "TAP A TO GO BACK" : "PRESS ACTION TO GO BACK", height * 0.66, 22, 0.5);
   }
 
   drawCountdown(text) {
@@ -249,7 +253,7 @@ class Hud {
     this.#center("CONTINUE", height * 0.24, 58);
     const shown = countdownNumber(secondsLeft);
     if (shown !== null) this.#center(String(shown), height * 0.36, 132);
-    this.#center("PRESS P TO INSERT COIN", height * 0.68, 26);
+    this.#center(this.touch ? "TAP P TO INSERT COIN" : "PRESS P TO INSERT COIN", height * 0.68, 26);
   }
 
   /** 컨티뉴 실패 후 암전. */
@@ -267,6 +271,7 @@ class Hud {
     this.#center("GAME OVER", height * 0.26, 84);
     this.#center(`SCORE ${padScore(score)}`, height * 0.45, 34);
     this.#center(`HI SCORE ${padScore(hiScore)}`, height * 0.54, 26);
-    this.#center("PRESS ACTION TO REGISTER YOUR NAME", height * 0.7, 24);
+    const hint = this.touch ? "TAP A TO REGISTER YOUR NAME" : "PRESS ACTION TO REGISTER YOUR NAME";
+    this.#center(hint, height * 0.7, 24);
   }
 }

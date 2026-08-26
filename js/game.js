@@ -48,6 +48,7 @@ class Game {
     this.ranking = new RankingView(this.ctx, assets.font, board);
 
     this.bgTileWidth = CONFIG.view.width;
+    this.touchMode = false;
     this.rankingFromGame = false; // 이름 등록을 거쳐서 온 랭킹인지
 
     this.input.onFirstKey = () => {
@@ -142,6 +143,12 @@ class Game {
       return this.clearTimer * 1000 >= CONFIG.stageClear.fieldMs;
     }
     return this.finalClear && this.state === GAME_STATE.FADEOUT;
+  }
+
+  /** 터치 기기면 화면 안내 문구도 그쪽 버튼 이름으로 바꾼다. */
+  setTouchMode(on) {
+    this.touchMode = on;
+    this.hud.touch = on;
   }
 
   start() {
@@ -785,6 +792,14 @@ async function boot() {
     await board.load().catch(() => {});
 
     const game = new Game(canvas, assets, audio, board);
+
+    // 터치 기기에서만 화면 위 조이패드를 띄운다. 키보드는 언제나 그대로 먹는다.
+    if (isTouchDevice()) {
+      document.body.classList.add("touch-enabled");
+      game.setTouchMode(true);
+      new TouchControls(game.input, document.getElementById("touch"));
+    }
+
     window.__game = game; // 디버깅/밸런스 확인용 (canvas id="game" 과 겹치지 않게 언더스코어)
     game.start();
   } catch (error) {

@@ -15,9 +15,15 @@ body {
 
 body {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-family: "Consolas", "Courier New", monospace;
+  /* 터치로 스크롤·확대·길게 누르기가 끼어들지 않게 한다. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cabinet {
@@ -47,4 +53,120 @@ body {
  */
 #game.crt {
   filter: brightness(1.32) saturate(1.2) contrast(1.06);
+}
+
+/* ── 터치 조작 ──────────────────────────────────────────────────────────────
+ * 세로 화면에서는 레터박스로 남는 아래 공간에 놓고,
+ * 가로 화면에서는 남는 공간이 없으므로 화면 네 귀퉁이에 반투명하게 얹는다.
+ */
+.touch {
+  display: none;
+}
+
+body.touch-enabled .touch {
+  display: block;
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* 빈 곳은 통과시키고 버튼만 받는다 */
+  z-index: 10;
+}
+
+.stick,
+.key {
+  pointer-events: auto;
+  position: absolute;
+  touch-action: none;
+  border: 2px solid rgba(255, 214, 92, 0.55);
+  background: rgba(10, 14, 24, 0.42);
+  color: #ffd65c;
+  font-family: inherit;
+  font-weight: bold;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stick {
+  left: 5vmin;
+  bottom: 6vmin;
+  width: 32vmin;
+  height: 32vmin;
+  max-width: 190px;
+  max-height: 190px;
+}
+
+.knob {
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  background: rgba(255, 214, 92, 0.35);
+  border: 2px solid rgba(255, 214, 92, 0.7);
+  transition: transform 60ms linear;
+}
+
+.buttons {
+  position: absolute;
+  right: 5vmin;
+  bottom: 6vmin;
+  width: 42vmin;
+  height: 32vmin;
+  max-width: 250px;
+  max-height: 190px;
+}
+
+.key.punch,
+.key.kick {
+  width: 17vmin;
+  height: 17vmin;
+  max-width: 100px;
+  max-height: 100px;
+  font-size: 5vmin;
+}
+
+/* A 를 아래쪽 · 바깥에 둔다. 엄지가 자연스럽게 닿는 자리다. */
+.key.punch {
+  right: 0;
+  bottom: 0;
+}
+
+.key.kick {
+  right: 17vmin;
+  bottom: 12vmin;
+}
+
+/* 코인은 실수로 누르면 곤란하니 구석에 작게 둔다. */
+.key.coin {
+  top: 2vmin;
+  right: 2vmin;
+  width: 9vmin;
+  height: 9vmin;
+  max-width: 54px;
+  max-height: 54px;
+  font-size: 3.4vmin;
+  opacity: 0.7;
+}
+
+.key.down {
+  background: rgba(255, 214, 92, 0.32);
+}
+
+/* 세로 화면에서는 캔버스 아래에 넉넉한 여백이 생긴다. 거기로 내려서 화면을 가리지 않는다. */
+@media (orientation: portrait) {
+  .stick,
+  .buttons {
+    bottom: 4vh;
+  }
+
+  .key.punch,
+  .key.kick {
+    width: 22vmin;
+    height: 22vmin;
+    font-size: 6.5vmin;
+  }
+
+  .key.kick {
+    right: 22vmin;
+    bottom: 14vmin;
+  }
 }
