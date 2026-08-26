@@ -216,10 +216,11 @@ class Hud {
     ctx.restore();
   }
 
-  drawStageClear(stage, name) {
+  drawStageClear(stage, name, score) {
     const { height } = CONFIG.view;
-    this.#center("STAGE CLEAR", height * 0.3, 70);
-    this.#center(`STAGE ${stage}  ${name}`, height * 0.44, 28, 0.85);
+    this.#center("STAGE CLEAR", height * 0.26, 70);
+    this.#center(`STAGE ${stage}  ${name}`, height * 0.4, 28, 0.85);
+    this.#center(`SCORE ${padScore(score)}`, height * 0.52, 32, 0.9);
   }
 
   /** 컨티뉴 카운트다운. 이 사이에 코인이 들어오면 이어서 시작한다. */

@@ -210,6 +210,7 @@ const CONFIG = {
   intro: {
     startX: -120,
     walkSpeed: 190,
+    illustMs: 1300, // 배경 일러스트만 보여주는 시간. 그다음에 플레이어가 걸어 들어온다
     countdown: ["3", "2", "1", "START"],
     countdownMs: 620,
   },

@@ -70,6 +70,7 @@ class Game {
     this.fadeTimer = 0;
     this.gameOverTimer = 0;
     this.timeUp = false;
+    this.finalClear = false;
 
     this.sparks.clear();
     this.shake.clear();
@@ -90,6 +91,7 @@ class Game {
     this.stageTimer = this.#stageSeconds();
     this.stageBannerTimer = 0;
     this.clearTimer = 0;
+    this.introLeadTimer = CONFIG.intro.illustMs / 1000;
     this.cameraX = 0;
     this.countdownIndex = 0;
     this.countdownTimer = CONFIG.intro.countdownMs / 1000;
@@ -105,7 +107,7 @@ class Game {
     return this.stageDef.endless ? endlessSeconds : seconds;
   }
 
-  /** 화면 왼쪽 밖에 세워두고 인트로에서 걸어 들어오게 한다. */
+  /** 화면 왼쪽 밖에 세워둔다. 걸어 들어오는 건 인트로가 시작한다. */
   #createPlayer() {
     const { top, bottom } = CONFIG.stage;
 
@@ -113,7 +115,30 @@ class Game {
       audio: this.audio,
       buffAnims: this.assets.buffs,
     });
-    this.player.autoWalkTargetX = CONFIG.view.width * CONFIG.camera.anchorRatio;
+  }
+
+  /** 배경 일러스트를 먼저 보여주고, 그다음에 플레이어가 화면 밖에서 걸어 들어온다. */
+  #updateIntro(dt) {
+    if (this.introLeadTimer > 0) {
+      this.introLeadTimer -= dt;
+      if (this.introLeadTimer <= 0) {
+        this.player.autoWalkTargetX = CONFIG.view.width * CONFIG.camera.anchorRatio;
+      }
+      return;
+    }
+
+    if (this.#introFinished()) this.state = GAME_STATE.COUNTDOWN;
+  }
+
+  /**
+   * 클리어 일러스트를 띄우는 구간인지. 필드를 잠깐 보여준 다음부터다.
+   * 마지막 스테이지를 끝낸 암전도 일러스트 위에서 진행해야 화면이 튀지 않는다.
+   */
+  get showingClearArt() {
+    if (this.state === GAME_STATE.STAGE_CLEAR) {
+      return this.clearTimer * 1000 >= CONFIG.stageClear.fieldMs;
+    }
+    return this.finalClear && this.state === GAME_STATE.FADEOUT;
   }
 
   start() {
@@ -158,8 +183,8 @@ class Game {
 
     this.player.update(dt, this.input.pad, this.state === GAME_STATE.PLAYING);
 
-    if (this.state === GAME_STATE.INTRO && this.#introFinished()) {
-      this.state = GAME_STATE.COUNTDOWN;
+    if (this.state === GAME_STATE.INTRO) {
+      this.#updateIntro(dt);
     }
     if (this.state === GAME_STATE.COUNTDOWN) {
       this.#updateCountdown(dt);
@@ -393,6 +418,7 @@ class Game {
   /** 마지막 스테이지까지 끝냈으면 암전 후 게임 오버로 마무리한다. */
   #advanceStage() {
     if (this.stage >= CONFIG.stages.length) {
+      this.finalClear = true;
       this.state = GAME_STATE.FADEOUT;
       this.fadeTimer = 0;
       return;
@@ -591,9 +617,13 @@ class Game {
 
     ctx.save();
     ctx.translate(shake.x, shake.y);
-    this.#drawBackground(ctx);
-    if (this.state !== GAME_STATE.LOBBY) this.#drawActors(ctx);
-    this.sparks.draw(ctx, this.cameraX);
+    if (this.showingClearArt) {
+      this.#drawIllustration(ctx, this.assets.illustrations.clear);
+    } else {
+      this.#drawBackground(ctx);
+      if (this.state !== GAME_STATE.LOBBY) this.#drawActors(ctx);
+      this.sparks.draw(ctx, this.cameraX);
+    }
     ctx.restore();
 
     this.#drawOverlay();
@@ -608,6 +638,19 @@ class Game {
     for (let i = first; i <= last; i += 1) {
       ctx.drawImage(this.background, i * this.bgTileWidth - this.cameraX, 0, this.bgTileWidth, height);
     }
+  }
+
+  /** 연출용 전면 일러스트. 글자가 묻히지 않도록 살짝 어둡게 깐다. */
+  #drawIllustration(ctx, image) {
+    const { width, height } = CONFIG.view;
+
+    ctx.save();
+    ctx.fillStyle = "#05070c";
+    ctx.fillRect(0, 0, width, height);
+    if (image) ctx.drawImage(image, 0, 0, width, height);
+    ctx.fillStyle = "rgba(3, 5, 12, 0.42)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
 
   /** 발끝 y 가 작은(안쪽) 대상부터 그려 앞뒤 관계를 만든다. */
@@ -646,6 +689,15 @@ class Game {
       return;
     }
 
+    // 클리어 일러스트 위에는 HUD 를 얹지 않는다. 연출만 보여준다.
+    if (this.showingClearArt) {
+      this.hud.drawStageClear(this.stage, this.stageDef.name, this.score);
+      if (this.state === GAME_STATE.FADEOUT) {
+        this.hud.drawFade(this.fadeTimer / (CONFIG.continue.fadeMs / 1000));
+      }
+      return;
+    }
+
     this.hud.drawStats({
       lives: Math.max(0, this.lives),
       coins: this.coins,
@@ -671,12 +723,7 @@ class Game {
       this.hud.drawBossBanner(this.bossBannerTimer);
     }
 
-    if (this.state === GAME_STATE.STAGE_CLEAR) {
-      if (this.clearTimer * 1000 >= CONFIG.stageClear.fieldMs) {
-        this.hud.drawStageClear(this.stage, this.stageDef.name);
-      }
-      return;
-    }
+    if (this.state === GAME_STATE.STAGE_CLEAR) return;
 
     if (this.state === GAME_STATE.CONTINUE) {
       this.hud.drawContinue(this.continueTimer);
