@@ -311,10 +311,12 @@ class Hud {
     ctx.restore();
   }
 
-  drawGameOver(score, hiScore) {
+  /** @param {boolean} options.cleared  마지막 스테이지를 끝내고 온 거라면 실패가 아니다. */
+  drawGameOver(score, hiScore, { cleared = false } = {}) {
     const { height } = CONFIG.view;
     this.drawFade(1);
-    this.#center("GAME OVER", height * 0.26, 84);
+    this.#center(cleared ? "GAME CLEAR" : "GAME OVER", height * 0.26, cleared ? 74 : 84);
+    if (cleared) this.#center("CONGRATULATIONS", height * 0.36, 28, 0.85);
     this.#center(`SCORE ${padScore(score)}`, height * 0.45, 34);
     this.#center(`HI SCORE ${padScore(hiScore)}`, height * 0.54, 26);
     const hint = this.touch ? "TAP A TO REGISTER YOUR NAME" : "PRESS ACTION TO REGISTER YOUR NAME";

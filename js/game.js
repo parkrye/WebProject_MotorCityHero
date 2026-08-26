@@ -5,6 +5,8 @@
 //   │                             └────────── 다음 스테이지 ──────────────────┘
 //   │                                  PLAYING ─ 생명 0 · 시간 초과 ─> CONTINUE
 //   │                                                 └ 실패 -> FADEOUT -> GAMEOVER
+//   │
+//   │ 마지막 스테이지를 끝냈을 때만 같은 자리에 GAME OVER 대신 GAME CLEAR 가 뜬다.
 //   ├─ RANKING <───────────────── NAME ENTRY <─────────────────────────────────┘
 //   └─ EXIT
 //
@@ -21,7 +23,7 @@ const GAME_STATE = {
   STAGE_CLEAR: "stageClear",
   CONTINUE: "continue", // 생명 0 또는 시간 초과. 코인이 들어오면 이어서 시작한다.
   FADEOUT: "fadeout",   // 컨티뉴 실패 후 암전
-  GAMEOVER: "gameover",
+  GAMEOVER: "gameover", // 마지막 스테이지를 끝내고 온 거라면 GAME CLEAR 로 뜬다
   NAME_ENTRY: "nameEntry",
 };
 
@@ -355,7 +357,8 @@ class Game {
 
     this.state = GAME_STATE.GAMEOVER;
     this.gameOverTimer = 0;
-    this.audio.playBgm("gameover");
+    // 마지막 스테이지를 끝내고 온 암전이면 실패가 아니다. 클리어 곡을 그대로 이어서 튼다.
+    this.audio.playBgm(this.finalClear ? "clear" : "gameover");
     saveHiScore(this.hiScore);
   }
 
@@ -837,7 +840,7 @@ class Game {
       return;
     }
     if (this.state === GAME_STATE.GAMEOVER) {
-      this.hud.drawGameOver(this.score, this.hiScore);
+      this.hud.drawGameOver(this.score, this.hiScore, { cleared: this.finalClear });
     }
   }
 }
