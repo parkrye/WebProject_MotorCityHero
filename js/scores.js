@@ -88,12 +88,11 @@ class ScoreBoard {
    * 기록을 올리고 갱신된 목록을 받는다.
    * @returns {number} 등록된 순위(1부터). 100위 밖이면 0.
    */
-  async submit({ name, score, stage, players }) {
+  async submit({ name, score, stage }) {
     const entry = {
       name: sanitizeName(name),
       score: Math.max(0, Math.floor(score)),
       stage,
-      players,
       at: Date.now(),
     };
 

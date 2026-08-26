@@ -28,11 +28,7 @@ async function loadCharacter(def, durations) {
   return Object.fromEntries(entries);
 }
 
-/**
- * 1P, 그리고 있으면 2P 스프라이트. 2P 시트가 없으면 길이 1 이고,
- * 그 경우 Player 가 1P 시트에 색조를 돌려 쓴다.
- */
-async function loadPlayers(manifest) {
+async function loadPlayer(manifest) {
   const { attack, hit, idleFrameDuration, walkFrameDuration } = CONFIG.player;
   const durations = {
     idle: idleFrameDuration,
@@ -41,8 +37,7 @@ async function loadPlayers(manifest) {
     hit: hit.frameDuration,
   };
 
-  const defs = [manifest.player, manifest.player2].filter(Boolean);
-  return Promise.all(defs.map((def) => loadCharacter(def, durations)));
+  return loadCharacter(manifest.player, durations);
 }
 
 async function loadIcons(manifest) {
@@ -69,15 +64,15 @@ async function loadAssets() {
     throw new Error("assets/sprites.js 가 로드되지 않았습니다. build_sprites.py 를 실행하세요.");
   }
 
-  const [background, font, players, icons, enemies] = await Promise.all([
+  const [background, font, player, icons, enemies] = await Promise.all([
     loadImage(manifest.background),
     loadFont(manifest.font),
-    loadPlayers(manifest),
+    loadPlayer(manifest),
     loadIcons(manifest),
     loadEnemies(manifest),
   ]);
 
-  return { background, font, players, icons, enemies };
+  return { background, font, player, icons, enemies };
 }
 
 async function loadFont(def) {

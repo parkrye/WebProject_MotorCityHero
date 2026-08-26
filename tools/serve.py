@@ -78,7 +78,6 @@ def add_score(payload):
         "name": clean_name(payload.get("name")),
         "score": clamp_int(payload.get("score"), 0, 99_999_999),
         "stage": clamp_int(payload.get("stage"), 1, 99, 1),
-        "players": clamp_int(payload.get("players"), 1, 2, 1),
         "at": clamp_int(payload.get("at"), 0, 2**53, int(time.time() * 1000)),
     }
 

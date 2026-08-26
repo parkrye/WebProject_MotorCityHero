@@ -24,7 +24,8 @@ const CONFIG = {
   },
 
   player: {
-    startLives: 3, // 1P·2P 가 함께 쓰는 팀 생명
+    startLives: 3,
+    shadowColor: "#3a0f10", // 발밑 그림자
     speedX: 265,
     speedY: 155, // 깊이축은 느리게 (고전 벨트스크롤 감각)
     attack: {
@@ -45,19 +46,6 @@ const CONFIG = {
     continueGraceMs: 1200, // 컨티뉴 직후 잠깐 무적
     idleFrameDuration: 120,
     walkFrameDuration: 100,
-  },
-
-  // 2P 는 NumpadEnter 로 언제든 난입한다. 생명과 코인은 1P 와 공유한다.
-  players: {
-    labels: ["1P", "2P"],
-    labelSize: 17,
-    labelGap: 10,        // 머리 위 여백
-    shadowColors: ["#3a0f10", "#0d1a3a"], // 발밑 그림자로 1P/2P 를 구분한다
-    joinOffsetX: -130,   // 1P 기준 난입 위치. 화면 밖으로 나가면 반대편에 세운다.
-    joinGraceMs: 1400,   // 난입 직후 잠깐 무적
-    // player2 스프라이트가 없을 때만 쓰는 폴백. 1P 시트를 색조만 돌려서 그린다.
-    fallbackHue: 190,
-    viewMargin: 56,      // 2P 플레이 중 화면 밖으로 벗어나지 않게 잡는 여백
   },
 
   // 오락실 컨티뉴. 코인이 있으면 즉시, 없으면 카운트다운 동안 기다린다.

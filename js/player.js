@@ -1,16 +1,12 @@
-// 플레이어. 1P 는 WASD + J, 2P 는 화살표 + NumpadEnter.
+// 플레이어. WASD 로 움직이고 J 로 때린다.
 // 상태: idle / walk / attack / hit. 공격과 피격 중에는 이동 입력을 받지 않는다.
-// 생명은 개인이 아니라 팀 공유라 Game 이 들고 있고, 여기서는 "맞았다"까지만 판단한다.
+// 생명은 Game 이 들고 있고, 여기서는 "맞았다"까지만 판단한다.
 
 const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
 
 class Player extends Actor {
-  /**
-   * @param {number} index  0 = 1P, 1 = 2P
-   * @param {number} hue    전용 스프라이트가 없을 때 쓰는 색조 회전(도)
-   */
-  constructor(anims, x, y, { index = 0, font = null, audio = null, hue = 0 } = {}) {
-    // 무엇에 맞든 한 대 = 팀 생명 1. 개별 hp 는 쓰지 않는다.
+  constructor(anims, x, y, { audio = null } = {}) {
+    // 무엇에 맞든 한 대 = 생명 1. 개별 hp 는 쓰지 않는다.
     super({
       x,
       y,
@@ -19,17 +15,11 @@ class Player extends Actor {
       bodyWidth: 38,
     });
 
-    this.index = index;
-    this.font = font;
     this.audio = audio;
-    this.hue = hue;
-    this.label = CONFIG.players.labels[index] ?? `${index + 1}P`;
-    this.shadowColor = CONFIG.players.shadowColors[index] ?? "#000";
-    this.showLabel = false; // 2P 가 있을 때만 머리 위에 1P/2P 를 띄운다
 
     this.state = PLAYER_STATE.IDLE;
     this.downed = false;      // 생명이 0 이 되어 쓰러진 상태. 마지막 프레임을 유지한다.
-    this.invincibleTimer = 0; // 컨티뉴·난입 직후의 짧은 무적
+    this.invincibleTimer = 0; // 컨티뉴 직후의 짧은 무적
     this.recoveryTimer = 0;
     this.autoWalkTargetX = null; // 인트로 연출용. null 이 아니면 입력 대신 자동 이동.
     this.hitThisSwing = new Set();
@@ -183,11 +173,6 @@ class Player extends Actor {
     this.animator.play(PLAYER_STATE.IDLE, { loop: true, restart: true });
   }
 
-  /** 2P 난입. 등장하자마자 둘러싸이지 않도록 잠깐 무적. */
-  join() {
-    this.invincibleTimer = CONFIG.players.joinGraceMs / 1000;
-  }
-
   draw(ctx, cameraX) {
     // 무적 동안 깜빡여서 알린다. 쓰러진 동안에는 깜빡이지 않는다.
     const blinking = !this.downed && this.invincibleTimer > 0 && this.state !== PLAYER_STATE.HIT;
@@ -196,26 +181,7 @@ class Player extends Actor {
     const screenX = this.x - cameraX;
     const scale = this.scale;
 
-    drawShadow(ctx, screenX, this.y, this.bodyWidth * scale * 1.1, this.shadowColor, 0.42);
-    this.animator.draw(ctx, screenX, this.y, scale, this.isFlipped, {
-      tint: this.tint,
-      alpha,
-      hue: this.hue,
-    });
-
-    // 쓰러지면 몸은 바닥에 눕는데 라벨만 서 있던 키 높이에 떠서 어색하다. 그때는 숨긴다.
-    if (this.showLabel && !this.downed) this.#drawLabel(ctx, screenX, scale, alpha);
-  }
-
-  #drawLabel(ctx, screenX, scale, alpha) {
-    if (!this.font || !this.animator.sheet) return;
-
-    const { labelSize, labelGap } = CONFIG.players;
-    const top = this.y - this.animator.sheet.frameHeight * scale - labelGap - labelSize;
-    this.font.draw(ctx, this.label, screenX, top, {
-      size: labelSize,
-      align: "center",
-      alpha: alpha * 0.9,
-    });
+    drawShadow(ctx, screenX, this.y, this.bodyWidth * scale * 1.1, CONFIG.player.shadowColor, 0.42);
+    this.animator.draw(ctx, screenX, this.y, scale, this.isFlipped, { tint: this.tint, alpha });
   }
 }

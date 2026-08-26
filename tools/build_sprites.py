@@ -12,7 +12,6 @@ canvas 의 drawImage 는 애니메이션 GIF 의 프레임을 제어할 수 없�
 원본 폴더 구조 (전부 선택):
     player_idle.gif / player_walk.gif / player_attack.gif / player_hit.gif
     player_kick.gif / player_clear.gif   없으면 게임이 attack / idle 로 대체한다
-    player2/player2_idle.gif ...         (선택)
     game_bg.png                          스테이지 2(디트로이트) 배경
     bg_stage1.png ... bg_stage6.png      스테이지별 배경. 없는 번호는 game_bg 로 남는다
     illust_clear.png                     스테이지 클리어 연출 일러스트
@@ -292,10 +291,7 @@ def collect_audio(src, out_dir):
 
 
 def find_player_gifs(src, name):
-    """<src>/<name>/ 를 먼저 보고, 없으면 <src> 바로 아래에서 찾는다.
-
-    2P 원본은 보통 폴더째 받으므로 두 배치를 모두 받아준다.
-    """
+    """<src>/<name>/ 를 먼저 보고, 없으면 <src> 바로 아래에서 찾는다."""
     for base in (src / name, src):
         paths = {a: base / (name + "_" + a + ".gif") for a in PLAYER_ANIMS}
         if all(p.exists() for p in paths.values()):
@@ -488,14 +484,6 @@ def main():
 
     if not manifest.get("player"):
         sys.exit("player_*.gif 도 기존 매니페스트도 없습니다: " + str(src))
-
-    # 2P 는 선택 사항. 없으면 게임이 1P 시트를 색조만 바꿔서 쓴다.
-    print("player2:")
-    paths = find_player_gifs(src, "player2")
-    if paths is None:
-        print("  skip (player2_*.gif 없음. 2P 는 색조 폴백으로 그려진다)")
-    else:
-        manifest["player2"] = bake("player2", {a: load_frames(p) for a, p in paths.items()}, out_dir)
 
     print("enemies:")
     for i in range(1, ENEMY_COUNT + 1):

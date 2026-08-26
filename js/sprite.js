@@ -32,9 +32,8 @@ class SpriteSheet {
    * @param {object} options
    * @param {string|null} options.tint  피격 플래시 색. null 이면 원본 그대로.
    * @param {number} options.alpha
-   * @param {number} options.hue  색조 회전(도). 전용 스프라이트가 없는 2P 폴백용.
    */
-  draw(ctx, frame, footX, footY, scale, flip, { tint = null, alpha = 1, hue = 0 } = {}) {
+  draw(ctx, frame, footX, footY, scale, flip, { tint = null, alpha = 1 } = {}) {
     const index = Math.min(Math.max(frame | 0, 0), this.frameCount - 1);
     const sx = index * this.sourceWidth;
     const width = this.frameWidth * scale;
@@ -46,8 +45,8 @@ class SpriteSheet {
     ctx.translate(footX, footY);
     if (flip) ctx.scale(-1, 1);
 
-    if (tint || hue) {
-      this.#drawProcessed(ctx, sx, offsetX, -height, width, height, tint, hue);
+    if (tint) {
+      this.#drawProcessed(ctx, sx, offsetX, -height, width, height, tint);
     } else {
       ctx.drawImage(
         this.image, sx, 0, this.sourceWidth, this.sourceHeight,
@@ -58,8 +57,8 @@ class SpriteSheet {
     ctx.restore();
   }
 
-  /** 색조 회전과 플래시 틴트는 오프스크린에서 처리해야 아래 픽셀이 물들지 않는다. */
-  #drawProcessed(ctx, sx, dx, dy, width, height, tint, hue) {
+  /** 플래시 틴트는 오프스크린에서 처리해야 아래 픽셀이 물들지 않는다. */
+  #drawProcessed(ctx, sx, dx, dy, width, height, tint) {
     const { sourceWidth, sourceHeight } = this;
 
     tintBuffer.width = sourceWidth;
@@ -67,16 +66,12 @@ class SpriteSheet {
     tintCtx.clearRect(0, 0, sourceWidth, sourceHeight);
     tintCtx.imageSmoothingEnabled = false;
 
-    tintCtx.filter = hue ? `hue-rotate(${hue}deg) saturate(1.3)` : "none";
     tintCtx.drawImage(this.image, sx, 0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
-    tintCtx.filter = "none";
 
-    if (tint) {
-      tintCtx.globalCompositeOperation = "source-atop";
-      tintCtx.fillStyle = tint;
-      tintCtx.fillRect(0, 0, sourceWidth, sourceHeight);
-      tintCtx.globalCompositeOperation = "source-over";
-    }
+    tintCtx.globalCompositeOperation = "source-atop";
+    tintCtx.fillStyle = tint;
+    tintCtx.fillRect(0, 0, sourceWidth, sourceHeight);
+    tintCtx.globalCompositeOperation = "source-over";
 
     ctx.drawImage(tintBuffer, dx, dy, width, height);
   }
@@ -137,7 +132,7 @@ class Animator {
   }
 }
 
-/** 캐릭터를 바닥에 붙여 보이게 하는 타원 그림자. 색으로 1P/2P 를 구분한다. */
+/** 캐릭터를 바닥에 붙여 보이게 하는 타원 그림자. */
 function drawShadow(ctx, footX, footY, radius, color = "#000", alpha = 0.32) {
   ctx.save();
   ctx.globalAlpha = alpha;

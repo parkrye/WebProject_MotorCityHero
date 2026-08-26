@@ -68,11 +68,6 @@ class Actor {
     this.y = clamp(this.y, CONFIG.stage.top, CONFIG.stage.bottom);
   }
 
-  /** 카메라 밖으로 걸어나가지 못하게 한다. 2P 가 서로 반대로 달릴 때 필요하다. */
-  clampToView(cameraX, margin) {
-    this.x = clamp(this.x, cameraX + margin, cameraX + CONFIG.view.width - margin);
-  }
-
   draw(ctx, cameraX) {
     const screenX = this.x - cameraX;
     const scale = this.scale;

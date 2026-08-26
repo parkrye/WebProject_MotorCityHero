@@ -1,4 +1,4 @@
-// 에너미. enemy_1 ~ enemy_6 으로 갈수록 강해진다.
+// 에너미. 번호가 커질수록 강해진다.
 // 원본 GIF 가 한 종류뿐이라 이동/대기를 같은 루프로 쓰고,
 // 공격은 준비 동작(정지) → 타격 → 쿨다운 으로 표현한다.
 
@@ -38,60 +38,41 @@ class Enemy extends Actor {
   }
 
   /**
-   * @param {Player[]} players  노릴 수 있는 플레이어들
-   * @returns {Player|null} 이번 프레임에 때린 플레이어. 게임 루프가 데미지를 적용한다.
+   * @param {Player} player  노릴 대상
+   * @returns {boolean} 이번 프레임에 때렸는지. 데미지는 게임 루프가 적용한다.
    */
-  update(dt, players) {
+  update(dt, player) {
     this.updateCommon(dt);
 
     if (this.isDying) {
       this.deathTimer -= dt;
       if (this.deathTimer <= 0) this.dead = true;
-      return null;
+      return false;
     }
 
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
-      return null;
+      return false;
     }
 
-    const target = this.#pickTarget(players);
-    if (!target) return null;
+    if (player.downed) return false;
 
     this.timer -= dt;
 
-    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup(target);
-    if (this.state === ENEMY_STATE.COOLDOWN && this.timer > 0) return null;
+    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup(player);
+    if (this.state === ENEMY_STATE.COOLDOWN && this.timer > 0) return false;
 
     this.state = ENEMY_STATE.APPROACH;
-    this.#approach(dt, target);
-    return null;
-  }
-
-  /** 가장 가까운 플레이어를 노린다. 쓰러진 쪽은 쳐다보지 않는다. */
-  #pickTarget(players) {
-    let best = null;
-    let bestDistance = Infinity;
-
-    for (const player of players) {
-      if (player.downed) continue;
-
-      // 깊이 차이는 좁히기 더 어려우므로 가중치를 준다.
-      const distance = Math.hypot(player.x - this.x, (player.y - this.y) * 1.6);
-      if (distance >= bestDistance) continue;
-
-      best = player;
-      bestDistance = distance;
-    }
-    return best;
+    this.#approach(dt, player);
+    return false;
   }
 
   #updateWindup(player) {
-    if (this.timer > 0) return null;
+    if (this.timer > 0) return false;
 
     this.state = ENEMY_STATE.COOLDOWN;
     this.timer = this.stats.attackCooldown / 1000;
-    return this.#inAttackRange(player) ? player : null;
+    return this.#inAttackRange(player);
   }
 
   #approach(dt, player) {

@@ -107,29 +107,6 @@ window.SPRITE_MANIFEST = {
     }
   },
   "background": "game_bg.png",
-  "player2": {
-    "frameWidth": 256,
-    "frameHeight": 256,
-    "anchorX": 128.0,
-    "anims": {
-      "idle": {
-        "file": "player2_idle.png",
-        "frames": 8
-      },
-      "walk": {
-        "file": "player2_walk.png",
-        "frames": 8
-      },
-      "attack": {
-        "file": "player2_attack.png",
-        "frames": 8
-      },
-      "hit": {
-        "file": "player2_hit.png",
-        "frames": 8
-      }
-    }
-  },
   "backgroundSize": [
     512,
     384

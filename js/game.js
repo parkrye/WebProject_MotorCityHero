@@ -4,8 +4,6 @@
 //   │                                                                          │
 //   ├─ RANKING <───────────────── NAME ENTRY <───────────────────────────────────┘
 //   └─ EXIT
-//
-// 2P 는 NumpadEnter 로 언제든 난입한다. 생명과 코인은 팀 공유라 Game 이 들고 있다.
 
 const GAME_STATE = {
   LOBBY: "lobby",
@@ -22,7 +20,6 @@ const GAME_STATE = {
 
 const MAX_DELTA = 1 / 30; // 탭 전환 후 한 프레임에 몰려 튀는 것 방지
 const SEPARATION_DEPTH = 20;
-const MAX_PLAYERS = 2;
 const GAMEOVER_AUTO_MS = 5000; // 이 시간이 지나면 알아서 이름 등록으로 넘어간다
 
 class Game {
@@ -44,7 +41,6 @@ class Game {
     this.ranking = new RankingView(this.ctx, assets.font, board);
 
     this.bgTileWidth = CONFIG.view.width;
-    this.rejoinTwoPlayer = false; // 다음 판에서 2P 를 그대로 세울지
     this.rankingFromGame = false; // 이름 등록을 거쳐서 온 랭킹인지
 
     this.input.onFirstKey = () => {
@@ -56,19 +52,8 @@ class Game {
     this.state = GAME_STATE.LOBBY;
   }
 
-  get twoPlayer() {
-    return this.players.length > 1;
-  }
-
-  /** 쓰러지지 않은 플레이어들. 카메라와 에너미 타겟의 기준이다. */
-  get activePlayers() {
-    const standing = this.players.filter((player) => !player.downed);
-    return standing.length > 0 ? standing : this.players;
-  }
-
   /** 새 판을 인트로 상태로 준비한다. */
   #resetGame() {
-    this.players = [];
     this.enemies = [];
     this.pickups = [];
     this.lives = CONFIG.player.startLives;
@@ -84,57 +69,20 @@ class Game {
     this.stageBannerTimer = 0;
     this.shownStage = 1;
 
-    this.#addPlayer();
-    if (this.rejoinTwoPlayer) this.#addPlayer(); // 직전 판이 2P 였으면 그대로 이어간다
-
+    this.#createPlayer();
     this.spawner.reset();
     this.sparks.clear();
     this.shake.clear();
   }
 
-  /** 인트로면 화면 밖에서 걸어 들어오고, 플레이 중이면 1P 옆에 세운다. */
-  #addPlayer() {
-    const index = this.players.length;
-    if (index >= MAX_PLAYERS) return null;
-
+  /** 화면 왼쪽 밖에 세워두고 인트로에서 걸어 들어오게 한다. */
+  #createPlayer() {
     const { top, bottom } = CONFIG.stage;
-    const anchorX = CONFIG.view.width * CONFIG.camera.anchorRatio;
-    const intro = this.state === GAME_STATE.INTRO || this.state === GAME_STATE.COUNTDOWN;
 
-    const spawn = intro
-      ? { x: CONFIG.intro.startX + index * CONFIG.players.joinOffsetX, y: (top + bottom) / 2 + 40 + index * 46 }
-      : this.#joinSpot();
-
-    const player = new Player(this.assets.players[index] ?? this.assets.players[0], spawn.x, spawn.y, {
-      index,
-      font: this.assets.font,
+    this.player = new Player(this.assets.player, CONFIG.intro.startX, (top + bottom) / 2 + 40, {
       audio: this.audio,
-      // 전용 스프라이트가 없을 때만 색조를 돌려 1P 와 구분한다.
-      hue: this.assets.players[index] ? 0 : index * CONFIG.players.fallbackHue,
     });
-
-    if (intro) {
-      player.autoWalkTargetX = anchorX + index * CONFIG.players.joinOffsetX;
-    } else {
-      player.join();
-    }
-
-    this.players.push(player);
-    for (const other of this.players) other.showLabel = this.players.length > 1;
-    return player;
-  }
-
-  /** 플레이 도중 난입할 자리. 1P 옆이 화면 밖이면 반대쪽에 세운다. */
-  #joinSpot() {
-    const leader = this.players[0];
-    const margin = CONFIG.players.viewMargin;
-    const left = this.cameraX + margin;
-    const right = this.cameraX + CONFIG.view.width - margin;
-
-    let x = leader.x + CONFIG.players.joinOffsetX;
-    if (x < left) x = leader.x - CONFIG.players.joinOffsetX;
-
-    return { x: clamp(x, left, right), y: clamp(leader.y + 40, CONFIG.stage.top, CONFIG.stage.bottom) };
+    this.player.autoWalkTargetX = CONFIG.view.width * CONFIG.camera.anchorRatio;
   }
 
   start() {
@@ -159,7 +107,6 @@ class Game {
       this.coins += 1;
       this.audio.play("coin");
     }
-    this.#handleJoin();
 
     if (this.state === GAME_STATE.GAMEOVER) {
       this.#updateGameOver(dt);
@@ -174,8 +121,7 @@ class Game {
       return;
     }
 
-    const controllable = this.state === GAME_STATE.PLAYING;
-    this.#updatePlayers(dt, controllable);
+    this.player.update(dt, this.input.pad, this.state === GAME_STATE.PLAYING);
 
     if (this.state === GAME_STATE.INTRO && this.#introFinished()) {
       this.state = GAME_STATE.COUNTDOWN;
@@ -188,7 +134,6 @@ class Game {
     }
 
     this.#updateCamera(dt);
-    this.#keepPlayersOnScreen();
     this.sparks.update(dt);
     this.shake.update(dt);
     if (this.stageBannerTimer > 0) this.stageBannerTimer -= dt;
@@ -266,37 +211,14 @@ class Game {
     this.ranking.reset();
 
     try {
-      await this.board.submit({
-        name,
-        score: this.score,
-        stage: this.spawner.stage,
-        players: this.players.length,
-      });
+      await this.board.submit({ name, score: this.score, stage: this.spawner.stage });
     } catch {
       /* submit 안에서 이미 폴백까지 처리한다 */
     }
   }
 
-  /** 컨티뉴 중이거나 게임이 끝난 뒤에는 난입을 받지 않는다. */
-  #handleJoin() {
-    if (this.twoPlayer) return;
-    if (!this.input.for(1).confirmed) return;
-    if (this.state === GAME_STATE.CONTINUE || this.state === GAME_STATE.FADEOUT) return;
-    if (this.state === GAME_STATE.GAMEOVER) return;
-
-    this.#addPlayer();
-    this.audio.play("coin");
-    this.rejoinTwoPlayer = true;
-  }
-
-  #updatePlayers(dt, controllable) {
-    this.players.forEach((player, index) => {
-      player.update(dt, this.input.for(index), controllable);
-    });
-  }
-
   #introFinished() {
-    return this.players.every((player) => player.autoWalkTargetX === null);
+    return this.player.autoWalkTargetX === null;
   }
 
   /** 잠깐 점수를 보여준 뒤 이름 등록으로 넘어간다. */
@@ -315,7 +237,7 @@ class Game {
 
   /** 코인이 들어오면 즉시 이어서 시작, 카운트다운이 끝나면 암전으로 넘어간다. */
   #updateContinue(dt) {
-    this.#updatePlayers(dt, false); // 쓰러진 자세를 유지한 채 넉백만 잦아든다
+    this.player.update(dt, this.input.pad, false); // 쓰러진 자세를 유지한 채 넉백만 잦아든다
     this.sparks.update(dt);
     this.shake.update(dt);
 
@@ -357,7 +279,7 @@ class Game {
   #updatePlaying(dt) {
     this.audio.playBgm("game");
     this.#updateEnemies(dt);
-    this.#resolvePlayerAttacks();
+    this.#resolveAttack(this.player);
     this.#separateEnemies();
     this.#updatePickups(dt);
     this.#updateSpawning(dt);
@@ -366,24 +288,25 @@ class Game {
   }
 
   #updateEnemies(dt) {
+    const player = this.player;
+
     for (const enemy of this.enemies) {
-      const victim = enemy.update(dt, this.players);
-      if (!victim || !victim.takeDamage(enemy.x)) continue;
+      if (!enemy.update(dt, player) || !player.takeDamage(enemy.x)) continue;
 
       this.lives -= 1;
       this.audio.play("hit");
       this.shake.kick(9, 0.22);
-      this.sparks.burst(victim.x, victim.y - 90 * victim.scale, -enemy.facing, 1);
+      this.sparks.burst(player.x, player.y - 90 * player.scale, -enemy.facing, 1);
 
       if (this.lives <= 0) {
-        this.#onPartyDown(); // enemies 를 비울 수 있으므로 순회를 끝낸다
+        this.#onPlayerDown(); // enemies 를 비울 수 있으므로 순회를 끝낸다
         return;
       }
     }
   }
 
-  /** 팀 생명이 다 떨어졌을 때. 코인이 있으면 바로, 없으면 카운트다운을 띄운다. */
-  #onPartyDown() {
+  /** 생명이 다 떨어졌을 때. 코인이 있으면 바로, 없으면 카운트다운을 띄운다. */
+  #onPlayerDown() {
     this.lives = 0;
 
     if (this.coins > 0) {
@@ -392,7 +315,7 @@ class Game {
     }
 
     // 쓰러진 마지막 프레임 그대로 멈춰 세운다.
-    for (const player of this.players) player.knockOut();
+    this.player.knockOut();
     this.state = GAME_STATE.CONTINUE;
     this.continueTimer = CONFIG.continue.seconds;
     this.audio.playBgm("countdown");
@@ -403,16 +326,12 @@ class Game {
   #spendCoinAndResume() {
     this.coins -= 1;
     this.lives = CONFIG.player.startLives;
-    for (const player of this.players) player.revive();
+    this.player.revive();
 
     this.audio.stop("countdown");
     this.enemies.length = 0; // 부활하자마자 둘러싸이지 않도록 정리
     this.spawner.timer = CONFIG.spawn.firstDelay / 1000;
     this.state = GAME_STATE.PLAYING;
-  }
-
-  #resolvePlayerAttacks() {
-    for (const player of this.players) this.#resolveAttack(player);
   }
 
   #resolveAttack(player) {
@@ -442,14 +361,11 @@ class Game {
     this.pickups.push(new Pickup(this.assets.icons.healItem, enemy.x, enemy.y));
   }
 
-  /** 회복 아이템은 누가 먹든 공유 생명이 늘어난다. */
   #updatePickups(dt) {
     for (const pickup of this.pickups) {
       pickup.update(dt);
       if (pickup.taken) continue;
-
-      const taker = this.players.find((player) => !player.downed && pickup.overlaps(player));
-      if (!taker) continue;
+      if (this.player.downed || !pickup.overlaps(this.player)) continue;
 
       pickup.taken = true;
       this.lives += 1;
@@ -508,26 +424,12 @@ class Game {
       return;
     }
 
-    // 2P 가 있으면 둘의 가운데를 따라간다.
-    const group = this.activePlayers;
-    const center = group.reduce((sum, player) => sum + player.x, 0) / group.length;
-
     const target = clamp(
-      center - CONFIG.view.width * CONFIG.camera.anchorRatio,
+      this.player.x - CONFIG.view.width * CONFIG.camera.anchorRatio,
       0,
       CONFIG.world.width - CONFIG.view.width
     );
     this.cameraX += (target - this.cameraX) * Math.min(1, CONFIG.camera.lerp * dt);
-  }
-
-  /** 2P 가 서로 반대로 달려도 한 명이 화면 밖으로 사라지지 않게 잡아둔다. */
-  #keepPlayersOnScreen() {
-    if (!this.twoPlayer || this.state === GAME_STATE.INTRO) return;
-
-    for (const player of this.players) {
-      if (player.autoWalkTargetX !== null) continue;
-      player.clampToView(this.cameraX, CONFIG.players.viewMargin);
-    }
   }
 
   draw() {
@@ -559,7 +461,7 @@ class Game {
 
   /** 발끝 y 가 작은(안쪽) 대상부터 그려 앞뒤 관계를 만든다. */
   #drawActors(ctx) {
-    const drawables = [...this.enemies, ...this.pickups, ...this.players].sort((a, b) => a.y - b.y);
+    const drawables = [...this.enemies, ...this.pickups, this.player].sort((a, b) => a.y - b.y);
     for (const drawable of drawables) drawable.draw(ctx, this.cameraX);
   }
 
@@ -568,7 +470,7 @@ class Game {
       this.hud.drawLobbyBackdrop();
       this.hud.drawTitle();
       this.lobby.draw({ sound: !this.audio.muted, screen: this.crt.enabled });
-      this.hud.drawControls(this.twoPlayer);
+      this.hud.drawControls();
       return;
     }
 
@@ -589,7 +491,7 @@ class Game {
 
     if (this.state === GAME_STATE.INTRO) {
       this.hud.drawTitle();
-      this.hud.drawControls(this.twoPlayer);
+      this.hud.drawControls();
       return;
     }
 
@@ -603,16 +505,12 @@ class Game {
 
     if (this.state === GAME_STATE.COUNTDOWN) {
       this.hud.drawCountdown(CONFIG.intro.countdown[this.countdownIndex]);
-      this.hud.drawControls(this.twoPlayer);
+      this.hud.drawControls();
       return;
     }
 
     if (this.stageBannerTimer > 0) {
       this.hud.drawStageBanner(this.spawner.stage, this.stageBannerTimer);
-    }
-
-    if (this.state === GAME_STATE.PLAYING && !this.twoPlayer) {
-      this.hud.drawJoinHint();
     }
 
     if (this.state === GAME_STATE.CONTINUE) {

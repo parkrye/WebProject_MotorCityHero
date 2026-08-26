@@ -89,7 +89,7 @@ class Hud {
     const labelY = rowY + (iconSize - labelSize) / 2 + 2; // 아이콘 높이 기준 세로 중앙
     let x = 24;
 
-    // 생명: 1P·2P 공유. 개수만큼 나열하되, 너무 많아지면 아이콘 하나 + X n 으로 줄인다.
+    // 생명: 개수만큼 나열하되, 너무 많아지면 아이콘 하나 + X n 으로 줄인다.
     if (lives <= maxHeartIcons) {
       for (let i = 0; i < lives; i += 1) {
         x += this.#icon(this.icons.heartIcon, x, rowY, iconSize) + iconGap;
@@ -116,21 +116,9 @@ class Hud {
     this.#center("MISTER D", height * 0.32, 40);
   }
 
-  /** 하단 조작 안내. 2P 참가 여부에 따라 아랫줄이 바뀐다. */
-  drawControls(twoPlayer) {
-    const bottom = CONFIG.view.height;
-    this.#center("1P WASD MOVE    J ACTION    P COIN", bottom - 74, 20, 0.8);
-    this.#center(
-      twoPlayer ? "2P ARROWS MOVE    NUM ENTER ACTION" : "PRESS NUM ENTER TO JOIN 2P",
-      bottom - 44,
-      20,
-      twoPlayer ? 0.8 : 0.62
-    );
-  }
-
-  /** 플레이 중에도 2P 가 아직 없으면 은은하게 난입을 안내한다. */
-  drawJoinHint() {
-    this.#center("NUM ENTER JOIN 2P", CONFIG.view.height - 34, 18, 0.42);
+  /** 하단 조작 안내. */
+  drawControls() {
+    this.#center("WASD MOVE    J ACTION    P COIN", CONFIG.view.height - 54, 20, 0.8);
   }
 
   /** 로비에서 배경 위에 깔아 글자가 묻히지 않게 하는 어둡기. */
