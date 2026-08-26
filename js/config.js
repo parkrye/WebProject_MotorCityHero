@@ -28,7 +28,8 @@ const CONFIG = {
     shadowColor: "#3a0f10", // 발밑 그림자
     speedX: 265,
     speedY: 155, // 깊이축은 느리게 (고전 벨트스크롤 감각)
-    // 킥은 모션만 다르고 판정 · 대미지 · 사거리는 펀치와 똑같다. 그래서 표를 나누지 않는다.
+    // 킥과 펀치는 대미지 · 사거리가 같고 깊이 판정만 갈린다.
+    // 펀치는 안쪽(위)으로, 킥은 앞쪽(아래)으로 depthBias 만큼 치우친다.
     attack: {
       frameDuration: 60,
       damage: 12,
@@ -36,6 +37,7 @@ const CONFIG = {
       activeTo: 5,
       reach: 118,     // 발 기준 앞쪽 사거리 (배율 적용 전)
       depthTolerance: 38,
+      depthBias: 15,  // 펀치는 위로, 킥은 아래로 이만큼 창이 옮겨간다
       knockback: 190,
       recovery: 60,
     },

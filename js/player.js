@@ -1,6 +1,6 @@
 // 플레이어. WASD 로 움직이고 J 로 펀치, K 로 킥을 낸다.
 // 상태: idle / walk / attack / hit. 공격과 피격 중에는 이동 입력을 받지 않는다.
-// 펀치와 킥은 재생하는 시트만 다르고 상태·판정·대미지는 완전히 같다.
+// 펀치와 킥은 대미지와 사거리가 같고, 깊이 판정만 위아래로 갈린다.
 // 생명은 Game 이 들고 있고, 여기서는 "맞았다"까지만 판단한다.
 
 const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
@@ -19,6 +19,7 @@ class Player extends Actor {
     this.audio = audio;
     // 킥 시트가 아직 없는 빌드에서는 펀치 모션으로 대신 낸다.
     this.kickAnim = anims.kick ? "kick" : PLAYER_STATE.ATTACK;
+    this.kicking = false; // 지금 나가는 공격이 킥인지. 깊이 판정이 갈린다.
 
     this.state = PLAYER_STATE.IDLE;
     this.downed = false;      // 생명이 0 이 되어 쓰러진 상태. 마지막 프레임을 유지한다.
@@ -36,6 +37,16 @@ class Player extends Actor {
   /** 쓰러졌거나, hit 애니메이션이 도는 동안, 그리고 부활 직후 잠깐은 맞지 않는다. */
   get isInvincible() {
     return this.downed || this.state === PLAYER_STATE.HIT || this.invincibleTimer > 0;
+  }
+
+  /**
+   * 공격이 닿는 깊이 창. 펀치는 안쪽(위)으로, 킥은 앞쪽(아래)으로 치우친다.
+   * @returns {{up: number, down: number}} 발끝 y 기준 위/아래 허용치
+   */
+  get attackDepth() {
+    const { depthTolerance, depthBias } = CONFIG.player.attack;
+    const bias = this.kicking ? -depthBias : depthBias;
+    return { up: depthTolerance + bias, down: depthTolerance - bias };
   }
 
   /** 공격 애니메이션 중 판정이 살아있는 프레임 구간인지. */
@@ -95,8 +106,8 @@ class Player extends Actor {
 
   #updateControl(dt, pad) {
     if (this.recoveryTimer <= 0) {
-      if (pad.justPressed("action")) return this.#startAttack(PLAYER_STATE.ATTACK);
-      if (pad.justPressed("kick")) return this.#startAttack(this.kickAnim);
+      if (pad.justPressed("action")) return this.#startAttack(false);
+      if (pad.justPressed("kick")) return this.#startAttack(true);
     }
 
     const move = pad.moveVector();
@@ -114,12 +125,13 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.WALK);
   }
 
-  /** @param {string} anim  재생할 시트 이름. 판정은 어느 쪽이든 같다. */
-  #startAttack(anim) {
+  /** @param {boolean} kick  킥이면 아래쪽, 펀치면 위쪽으로 판정이 넓어진다. */
+  #startAttack(kick) {
     this.audio?.play("attack");
     this.state = PLAYER_STATE.ATTACK;
+    this.kicking = kick;
     this.hitThisSwing.clear();
-    this.animator.play(anim, { loop: false, restart: true });
+    this.animator.play(kick ? this.kickAnim : PLAYER_STATE.ATTACK, { loop: false, restart: true });
   }
 
   #enterState(state) {
@@ -132,12 +144,13 @@ class Player extends Actor {
   canHit(target) {
     if (!this.isAttackActive || this.hitThisSwing.has(target)) return false;
 
-    const { reach, depthTolerance } = CONFIG.player.attack;
-    if (Math.abs(target.y - this.y) > depthTolerance) return false;
+    const { up, down } = this.attackDepth;
+    const depth = target.y - this.y; // + 가 앞쪽(아래), - 가 안쪽(위)
+    if (depth < -up || depth > down) return false;
 
     const scale = this.scale;
     const dx = (target.x - this.x) * this.facing; // 바라보는 쪽을 + 로
-    return dx > -18 * scale && dx < reach * scale;
+    return dx > -18 * scale && dx < CONFIG.player.attack.reach * scale;
   }
 
   registerHit(target) {
