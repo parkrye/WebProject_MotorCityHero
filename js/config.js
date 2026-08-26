@@ -270,7 +270,7 @@ const CONFIG = {
     iconSize: 38,
     iconGap: 8,
     labelSize: 22,
-    maxHeartIcons: 10, // 이보다 많아지면 아이콘 하나 + X n 으로 축약
+    countGap: 44, // 생명 묶음과 코인 묶음 사이
   },
 };
 

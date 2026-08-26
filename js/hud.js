@@ -73,6 +73,18 @@ class Hud {
     return width;
   }
 
+  /**
+   * 아이콘 하나 + `X nn`. 두 자리로 고정해 개수가 변해도 폭이 흔들리지 않는다.
+   * @returns {number} 차지한 가로 폭
+   */
+  #drawCount(image, count, x, rowY, labelY) {
+    const { iconSize, iconGap, labelSize } = CONFIG.hud;
+    const text = `X ${String(Math.max(0, count)).padStart(2, "0")}`;
+
+    const iconWidth = this.#icon(image, x, rowY, iconSize) + iconGap;
+    return iconWidth + this.font.draw(this.ctx, text, x + iconWidth, labelY, { size: labelSize });
+  }
+
   #center(text, y, size, alpha = 1) {
     this.font.draw(this.ctx, text, CONFIG.view.width / 2, y, { size, align: "center", alpha });
   }
@@ -80,7 +92,7 @@ class Hud {
   drawStats({ lives, coins, score, hiScore, stage, time, buffs = [], power = 0 }) {
     const ctx = this.ctx;
     const { width } = CONFIG.view;
-    const { barHeight, iconSize, iconGap, labelSize, maxHeartIcons } = CONFIG.hud;
+    const { barHeight, iconSize, iconGap, labelSize, countGap } = CONFIG.hud;
 
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
@@ -91,19 +103,10 @@ class Hud {
     const labelY = rowY + (iconSize - labelSize) / 2 + 2; // 아이콘 높이 기준 세로 중앙
     let x = 24;
 
-    // 생명: 개수만큼 나열하되, 너무 많아지면 아이콘 하나 + X n 으로 줄인다.
-    if (lives <= maxHeartIcons) {
-      for (let i = 0; i < lives; i += 1) {
-        x += this.#icon(this.icons.heartIcon, x, rowY, iconSize) + iconGap;
-      }
-    } else {
-      x += this.#icon(this.icons.heartIcon, x, rowY, iconSize) + iconGap;
-      x += this.font.draw(ctx, `X ${lives}`, x, labelY, { size: labelSize }) + iconGap;
-    }
-
-    x += 26;
-    x += this.#icon(this.icons.coin, x, rowY, iconSize) + iconGap;
-    this.font.draw(ctx, `X ${String(coins).padStart(2, "0")}`, x, labelY, { size: labelSize });
+    // 생명 · 코인 둘 다 아이콘 하나 + X n. 개수만큼 나열하면 생명이 늘어났을 때
+    // 오른쪽 표시를 밀고 들어가므로 폭이 변하지 않는 이 형태로 통일한다.
+    x += this.#drawCount(this.icons.heartIcon, lives, x, rowY, labelY) + countGap;
+    this.#drawCount(this.icons.coin, coins, x, rowY, labelY);
 
     this.font.draw(ctx, `STAGE ${stage}`, width - 24, labelY, { size: labelSize, align: "right" });
     this.#drawTime(time, labelY, labelSize);
