@@ -59,6 +59,19 @@ async function loadIllustrations(manifest) {
   return Object.fromEntries(entries);
 }
 
+/** @returns {object} 종류 -> Animator 에 넣을 애니메이션 세트 */
+async function loadBuffs(manifest) {
+  const entries = await Promise.all(
+    Object.entries(manifest.buffs ?? {}).map(async ([kind, def]) => {
+      const image = await loadImage(def.file);
+      // 이펙트는 좌우 대칭이라 중심을 프레임 한가운데로 둔다.
+      const sheet = new SpriteSheet(image, def.frameWidth, def.frameHeight, def.frames, def.frameWidth / 2);
+      return [kind, { loop: { sheet, frameDuration: CONFIG.buffs.frameDuration } }];
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
 async function loadIcons(manifest) {
   const entries = await Promise.all(
     Object.entries(manifest.icons ?? {}).map(async ([name, meta]) => [name, await loadImage(meta.file)])
@@ -83,7 +96,7 @@ async function loadAssets() {
     throw new Error("assets/sprites.js 가 로드되지 않았습니다. build_sprites.py 를 실행하세요.");
   }
 
-  const [background, font, player, icons, enemies, stageBackgrounds, illustrations] = await Promise.all([
+  const [background, font, player, icons, enemies, stageBackgrounds, illustrations, buffs] = await Promise.all([
     loadImage(manifest.background),
     loadFont(manifest.font),
     loadPlayer(manifest),
@@ -91,9 +104,10 @@ async function loadAssets() {
     loadEnemies(manifest),
     loadStageBackgrounds(manifest),
     loadIllustrations(manifest),
+    loadBuffs(manifest),
   ]);
 
-  return { background, font, player, icons, enemies, stageBackgrounds, illustrations };
+  return { background, font, player, icons, enemies, stageBackgrounds, illustrations, buffs };
 }
 
 async function loadFont(def) {

@@ -75,7 +75,7 @@ class Hud {
     this.font.draw(this.ctx, text, CONFIG.view.width / 2, y, { size, align: "center", alpha });
   }
 
-  drawStats({ lives, coins, score, hiScore, stage, time }) {
+  drawStats({ lives, coins, score, hiScore, stage, time, buffs = [] }) {
     const ctx = this.ctx;
     const { width } = CONFIG.view;
     const { barHeight, iconSize, iconGap, labelSize, maxHeartIcons } = CONFIG.hud;
@@ -109,6 +109,25 @@ class Hud {
     const scoreY = rowY + iconSize + 12;
     this.font.draw(ctx, `SCORE ${padScore(score)}`, 24, scoreY, { size: 26 });
     this.font.draw(ctx, `HI SCORE ${padScore(hiScore)}`, width - 24, scoreY, { size: 26, align: "right" });
+
+    this.#drawBuffs(buffs, scoreY);
+  }
+
+  /** 걸려 있는 버프와 남은 초. 보호막은 시간이 아니라 한 번 막을 때까지라 ON 으로 적는다. */
+  #drawBuffs(buffs, y) {
+    if (buffs.length === 0) return;
+
+    const { buffIconSize, buffLabelSize, buffGap } = CONFIG.hud;
+    let x = CONFIG.view.width / 2 - (buffs.length * (buffIconSize + buffGap + 42)) / 2;
+
+    for (const { kind, seconds } of buffs) {
+      const icon = this.icons[`powerup_${kind}`];
+      if (!icon) continue;
+
+      x += this.#icon(icon, x, y - 4, buffIconSize) + 6;
+      const label = seconds === Infinity ? "ON" : String(Math.ceil(seconds));
+      x += this.font.draw(this.ctx, label, x, y + 2, { size: buffLabelSize, alpha: 0.9 }) + buffGap;
+    }
   }
 
   drawTitle() {

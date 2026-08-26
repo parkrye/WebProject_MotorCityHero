@@ -6,7 +6,7 @@
 const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
 
 class Player extends Actor {
-  constructor(anims, x, y, { audio = null } = {}) {
+  constructor(anims, x, y, { audio = null, buffAnims = {} } = {}) {
     // 무엇에 맞든 한 대 = 생명 1. 개별 hp 는 쓰지 않는다.
     super({
       x,
@@ -17,6 +17,8 @@ class Player extends Actor {
     });
 
     this.audio = audio;
+    this.buffAnims = buffAnims;
+    this.buffs = new Map(); // 종류 -> { timer, animator }. timer 가 Infinity 면 스테이지 끝까지
     // 킥 시트가 아직 없는 빌드에서는 펀치 모션으로 대신 낸다.
     this.kickAnim = anims.kick ? "kick" : PLAYER_STATE.ATTACK;
     this.kicking = false; // 지금 나가는 공격이 킥인지. 깊이 판정이 갈린다.
@@ -28,6 +30,65 @@ class Player extends Actor {
     this.autoWalkTargetX = null; // 인트로 연출용. null 이 아니면 입력 대신 자동 이동.
     this.hitThisSwing = new Set();
     this.animator.play(PLAYER_STATE.IDLE);
+  }
+
+  /** 버프가 얹힌 실제 공격력. */
+  get attackDamage() {
+    const bonus = this.buffs.has("attack") ? CONFIG.buffs.attack.damageBonus : 0;
+    return CONFIG.player.attack.damage + bonus;
+  }
+
+  get speedFactor() {
+    return this.buffs.has("speed") ? CONFIG.buffs.speed.factor : 1;
+  }
+
+  /**
+   * 버프를 건다. 같은 종류를 다시 먹으면 시간만 갱신되고,
+   * 종류가 다르면 셋까지 함께 걸린다.
+   */
+  applyBuff(kind) {
+    const def = CONFIG.buffs[kind];
+    if (!def) return;
+
+    const timer = def.durationMs === null ? Infinity : def.durationMs / 1000;
+    const existing = this.buffs.get(kind);
+    if (existing) {
+      existing.timer = timer;
+      return;
+    }
+
+    const anims = this.buffAnims[kind];
+    const animator = anims ? new Animator(anims) : null;
+    animator?.play("loop");
+    this.buffs.set(kind, { timer, animator });
+  }
+
+  /**
+   * 보호막이 있으면 한 대를 대신 맞고 사라진다.
+   * @returns {boolean} 막아냈는지
+   */
+  consumeShield() {
+    if (this.isInvincible || !this.buffs.has("shield")) return false;
+
+    this.buffs.delete("shield");
+    this.invincibleTimer = CONFIG.buffs.shield.graceMs / 1000;
+    this.flashTimer = 0.2;
+    return true;
+  }
+
+  /** HUD 표시용. 남은 시간이 Infinity 면 보호막처럼 시간 제한이 없는 것이다. */
+  get activeBuffs() {
+    return [...this.buffs].map(([kind, buff]) => ({ kind, seconds: buff.timer }));
+  }
+
+  #updateBuffs(dt) {
+    for (const [kind, buff] of this.buffs) {
+      buff.animator?.update(dt);
+      if (buff.timer === Infinity) continue;
+
+      buff.timer -= dt;
+      if (buff.timer <= 0) this.buffs.delete(kind);
+    }
   }
 
   get isBusy() {
@@ -59,6 +120,7 @@ class Player extends Actor {
   /** @param {Pad} pad  이 플레이어에게 배정된 입력 */
   update(dt, pad, controllable) {
     this.updateCommon(dt);
+    this.#updateBuffs(dt);
 
     if (this.invincibleTimer > 0) this.invincibleTimer -= dt;
     if (this.recoveryTimer > 0) this.recoveryTimer -= dt;
@@ -120,8 +182,9 @@ class Player extends Actor {
       return;
     }
 
-    this.x += move.x * CONFIG.player.speedX * dt;
-    this.y += move.y * CONFIG.player.speedY * dt;
+    const factor = this.speedFactor;
+    this.x += move.x * CONFIG.player.speedX * factor * dt;
+    this.y += move.y * CONFIG.player.speedY * factor * dt;
     this.#enterState(PLAYER_STATE.WALK);
   }
 
@@ -172,9 +235,10 @@ class Player extends Actor {
     return true;
   }
 
-  /** 팀 생명이 0 이 되었을 때. hit 마지막 프레임(쓰러진 자세)에서 멈춘다. */
+  /** 생명이 0 이 되었을 때. hit 마지막 프레임(쓰러진 자세)에서 멈춘다. */
   knockOut() {
     this.downed = true;
+    this.buffs.clear(); // 쓰러지면 걸려 있던 버프도 함께 사라진다
     if (this.state === PLAYER_STATE.HIT) return; // 맞고 넘어가는 중이면 그대로 이어서
 
     this.state = PLAYER_STATE.HIT;
@@ -199,6 +263,16 @@ class Player extends Actor {
     const scale = this.scale;
 
     drawShadow(ctx, screenX, this.y, this.bodyWidth * scale * 1.1, CONFIG.player.shadowColor, 0.42);
+    this.#drawBuffs(ctx, screenX, scale, alpha);
     this.animator.draw(ctx, screenX, this.y, scale, this.isFlipped, { tint: this.tint, alpha });
+  }
+
+  /** 버프 이펙트는 발 위치에 캐릭터보다 먼저 그려서 몸에 가려지게 둔다. */
+  #drawBuffs(ctx, screenX, scale, alpha) {
+    if (this.downed) return;
+
+    for (const buff of this.buffs.values()) {
+      buff.animator?.draw(ctx, screenX, this.y, scale * CONFIG.buffs.scale, false, { alpha: alpha * 0.9 });
+    }
   }
 }

@@ -100,8 +100,19 @@ const CONFIG = {
     gridColumns: 10,
   },
 
+  // 버프 아이템. 종류가 다르면 함께 걸리고, 같은 걸 다시 먹으면 시간만 갱신된다.
+  // 보호막만 시간이 아니라 "한 번 막을 때까지"이고 스테이지가 바뀌면 사라진다.
+  buffs: {
+    frameDuration: 90,
+    scale: 0.9, // 캐릭터 발밑 이펙트 크기. 원근 배율에 곱한다
+    attack: { durationMs: 15000, damageBonus: 9 },
+    speed: { durationMs: 10000, factor: 1.42 },
+    shield: { durationMs: null, graceMs: 900 },
+  },
+
   pickup: {
     dropChance: 0.05, // 적 격파 시 회복 아이템 드랍 확률
+    buffChance: 0.06, // 그다음 이 확률로 버프 아이템 하나가 떨어진다
     scale: 0.5,
     bounceSpeed: 260,
     bounceDamping: 0.42,
@@ -206,6 +217,9 @@ const CONFIG = {
   hud: {
     stageBannerMs: 1600,
     bossBarWidth: 460,
+    buffIconSize: 26,
+    buffLabelSize: 18,
+    buffGap: 14,
     barHeight: 104,
     iconSize: 38,
     iconGap: 8,
@@ -213,6 +227,9 @@ const CONFIG = {
     maxHeartIcons: 10, // 이보다 많아지면 아이콘 하나 + X n 으로 축약
   },
 };
+
+// 버프 시트(buff_frames.png)의 위에서부터 순서와 같다.
+const BUFF_KINDS = ["attack", "shield", "speed"];
 
 /** @returns {object} 스테이지 정의. 범위를 벗어나면 마지막 스테이지로 잡는다. */
 function stageConfig(stage) {

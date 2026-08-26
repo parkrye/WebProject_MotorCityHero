@@ -1,9 +1,11 @@
-// 적을 쓰러뜨렸을 때 낮은 확률로 떨어지는 회복 아이템.
+// 적을 쓰러뜨렸을 때 낮은 확률로 떨어지는 아이템.
 // 튀어올랐다 착지한 뒤, 일정 시간이 지나면 깜빡이다 사라진다.
+// kind 가 "heal" 이면 생명, 나머지(attack · shield · speed)는 버프다.
 
 class Pickup {
-  constructor(image, x, y) {
+  constructor(image, x, y, kind = "heal") {
     this.image = image;
+    this.kind = kind;
     this.x = x;
     this.y = y;      // 그림자가 놓이는 바닥 y (= 깊이)
     this.height = 0; // 바닥에서 떠 있는 높이

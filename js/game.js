@@ -111,6 +111,7 @@ class Game {
 
     this.player = new Player(this.assets.player, CONFIG.intro.startX, (top + bottom) / 2 + 40, {
       audio: this.audio,
+      buffAnims: this.assets.buffs,
     });
     this.player.autoWalkTargetX = CONFIG.view.width * CONFIG.camera.anchorRatio;
   }
@@ -403,7 +404,16 @@ class Game {
     const player = this.player;
 
     for (const enemy of this.enemies) {
-      if (!enemy.update(dt, player) || !player.takeDamage(enemy.x)) continue;
+      if (!enemy.update(dt, player)) continue;
+
+      // 보호막이 있으면 생명 대신 그게 깨진다.
+      if (player.consumeShield()) {
+        this.audio.play("heal");
+        this.sparks.burst(player.x, player.y - 70 * player.scale, -enemy.facing, 1.4);
+        continue;
+      }
+
+      if (!player.takeDamage(enemy.x)) continue;
 
       this.lives -= 1;
       this.audio.play("hit");
@@ -473,7 +483,7 @@ class Game {
       if (enemy.isDying || !player.canHit(enemy)) continue;
 
       player.registerHit(enemy);
-      const killed = enemy.takeDamage(CONFIG.player.attack.damage, player.x);
+      const killed = enemy.takeDamage(player.attackDamage, player.x);
 
       const scale = enemy.scale;
       this.sparks.burst(enemy.x, enemy.y - 120 * scale, player.facing, scale);
@@ -489,9 +499,20 @@ class Game {
     }
   }
 
+  /** 회복 아이템을 먼저 굴리고, 빗나가면 그다음에 버프 아이템을 굴린다. */
   #maybeDrop(enemy) {
-    if (Math.random() >= CONFIG.pickup.dropChance) return;
-    this.pickups.push(new Pickup(this.assets.icons.healItem, enemy.x, enemy.y));
+    const { dropChance, buffChance } = CONFIG.pickup;
+    const roll = Math.random();
+
+    if (roll < dropChance) {
+      this.pickups.push(new Pickup(this.assets.icons.healItem, enemy.x, enemy.y));
+      return;
+    }
+    if (roll >= dropChance + buffChance) return;
+
+    const kind = BUFF_KINDS[Math.floor(Math.random() * BUFF_KINDS.length)];
+    const icon = this.assets.icons[`powerup_${kind}`];
+    if (icon) this.pickups.push(new Pickup(icon, enemy.x, enemy.y, kind));
   }
 
   #updatePickups(dt) {
@@ -501,9 +522,14 @@ class Game {
       if (this.player.downed || !pickup.overlaps(this.player)) continue;
 
       pickup.taken = true;
-      this.lives += 1;
       this.audio.play("heal");
       this.sparks.burst(pickup.x, pickup.y - 40, 1, 1);
+
+      if (pickup.kind === "heal") {
+        this.lives += 1;
+      } else {
+        this.player.applyBuff(pickup.kind);
+      }
     }
     this.pickups = this.pickups.filter((pickup) => !pickup.expired);
   }
@@ -627,6 +653,7 @@ class Game {
       hiScore: this.hiScore,
       stage: this.stage,
       time: this.stageTimer,
+      buffs: this.player.activeBuffs,
     });
 
     if (this.boss && !this.boss.dead) this.hud.drawBossBar(this.boss.hp / this.boss.maxHp);
