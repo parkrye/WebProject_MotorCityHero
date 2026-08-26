@@ -60,12 +60,16 @@ class Spawner {
     if (!anims) return null;
 
     const { marginX, fromLeftChance } = CONFIG.spawn;
+
+    // 화면 밖이면 맵 경계 너머여도 그대로 세운다. 여기서 월드 안으로 가두면
+    // 맵 끝에 붙어 있을 때 한쪽 등장이 통째로 막혀 늘 같은 방향에서만 오게 된다.
+    // 걸어 들어오는 동안은 Enemy.clampToStage 가 경계를 풀어준다.
     const leftX = cameraX - marginX;
     const rightX = cameraX + CONFIG.view.width + marginX;
 
-    // 흐름이 좌>우 이므로 기본은 오른쪽 등장. 보스는 언제나 정면(오른쪽)에서 걸어 나온다.
-    const useLeft = !boss && Math.random() < fromLeftChance && leftX > 0;
-    const x = clamp(useLeft ? leftX : rightX, 0, CONFIG.world.width);
+    // 보스만 언제나 정면(오른쪽)에서 걸어 나온다. 잡몹은 어디에 서 있든 양쪽에서 온다.
+    const useLeft = !boss && Math.random() < fromLeftChance;
+    const x = useLeft ? leftX : rightX;
 
     const { top, bottom } = CONFIG.stage;
     const y = boss ? (top + bottom) / 2 : top + 10 + Math.random() * (bottom - top - 16);

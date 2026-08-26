@@ -166,22 +166,70 @@ const CONFIG = {
   // hp 는 플레이어 공격력(12) 기준 "몇 대 맞아야 죽는지"로 잡았다.
   // 반대로 플레이어는 무엇에 맞든 한 대 = 생명 1 이라 에너미 쪽 damage 는 없다.
   // behavior 는 다가오는 방식, knockbackResist 는 맞고 밀리는 정도(1 이면 안 밀린다).
+  // motion 은 겉모습(이동 리듬 · 공격 자세)이고 behavior 는 다가오는 경로다. 둘은 겹쳐서 돈다.
   enemies: [
     { id: 1, hp: 10, speed: 88,  score: 20,  attackRange: 74, attackCooldown: 1250, windup: 320, scale: 0.72,
-      behavior: "dash",      knockbackResist: 0 },
+      behavior: "dash",      motion: "catHop",       knockbackResist: 0 },
     { id: 2, hp: 20, speed: 86,  score: 30,  attackRange: 78, attackCooldown: 1150, windup: 320, scale: 0.80,
-      behavior: "straight",  knockbackResist: 0.1 },
+      behavior: "straight",  motion: "kidHop",       knockbackResist: 0.1 },
     { id: 3, hp: 32, speed: 102, score: 45,  attackRange: 80, attackCooldown: 1050, windup: 300, scale: 0.84,
-      behavior: "zigzag",    knockbackResist: 0.15 },
-    { id: 4, hp: 44, speed: 76,  score: 60,  attackRange: 92, attackCooldown: 1000, windup: 300, scale: 0.96,
-      behavior: "straight",  knockbackResist: 0.55 },
+      behavior: "zigzag",    motion: "kidHop",       knockbackResist: 0.15 },
+    { id: 4, hp: 44, speed: 76,  score: 60,  attackRange: 92, attackCooldown: 1000, windup: 340, scale: 0.96,
+      behavior: "straight",  motion: "apeThrust",    knockbackResist: 0.55 },
     { id: 5, hp: 56, speed: 118, score: 80,  attackRange: 84, attackCooldown: 900,  windup: 280, scale: 0.88,
-      behavior: "hitAndRun", knockbackResist: 0.1 },
-    { id: 6, hp: 68, speed: 100, score: 105, attackRange: 96, attackCooldown: 850,  windup: 280, scale: 0.98,
-      behavior: "flank",     knockbackResist: 0.3 },
-    { id: 7, hp: 82, speed: 108, score: 135, attackRange: 92, attackCooldown: 820,  windup: 260, scale: 0.94,
-      behavior: "stalk",     knockbackResist: 0.45 },
+      behavior: "hitAndRun", motion: "ladyHop",      knockbackResist: 0.1 },
+    { id: 6, hp: 68, speed: 100, score: 105, attackRange: 96, attackCooldown: 850,  windup: 360, scale: 0.98,
+      behavior: "flank",     motion: "clubSwing",    knockbackResist: 0.3 },
+    { id: 7, hp: 82, speed: 108, score: 135, attackRange: 92, attackCooldown: 820,  windup: 300, scale: 0.94,
+      behavior: "stalk",     motion: "gangnamDance", knockbackResist: 0.45 },
   ],
+
+  // 에너미 겉모습. 원본 스프라이트가 종류마다 "걷기" 한 벌뿐이라
+  // 이동 리듬(gait)과 공격 자세(attack)를 코드로 만들어 종류를 눈으로 구분되게 한다.
+  //
+  // gait.kind
+  //   hop     폴짝. 공중에 떠 있는 동안에만 전진하고 착지하면 멈춘다
+  //   gallop  두 박자로 통통 튀며 좌우로 스텝을 밟는다
+  //   lumber  좌우로 크게 흔들리는 육중한 걸음
+  //   stride  묵직하게 뚜벅뚜벅. 한쪽으로 기울어 있다
+  //
+  // attack.pose 는 준비 동작 · 타격 구간의 자세이고,
+  // reachMul · depthMul · omni · lunge 는 실제 판정에 그대로 들어간다.
+  // 보이는 대로 맞아야 하므로 자세만 바꾸고 판정을 두지 않는 일은 없다.
+  enemyMotion: {
+    // 1. 고양이. 짧고 빠르게 폴짝이다가 앞으로 덮친다.
+    catHop: {
+      gait: { kind: "hop", periodMs: 430, height: 34, airRatio: 0.60, land: 0.26, tilt: 0.14 },
+      attack: { pose: "pounce", fx: "claw", lunge: 520, reachMul: 1.0, depthMul: 0.9 },
+    },
+    // 2 · 3. 꼬마아이. 고양이보다 크고 느리게 뛰고, 착지할 때 푹 눌린다.
+    kidHop: {
+      gait: { kind: "hop", periodMs: 610, height: 58, airRatio: 0.76, land: 0.32, tilt: -0.10 },
+      attack: { pose: "headbutt", fx: "none", lunge: 300, reachMul: 0.95, depthMul: 1.0 },
+    },
+    // 4. 원숭이. 육중하게 걸어와 주먹을 길게 내지른다. 사거리는 길고 판정은 얕다.
+    apeThrust: {
+      gait: { kind: "lumber", periodMs: 520, bob: 9, sway: 8, squash: 0.08, tilt: 0.05 },
+      attack: { pose: "thrust", fx: "thrust", lunge: 430, reachMul: 1.3, depthMul: 0.68 },
+    },
+    // 5. 여성. 길고 높게 체공했다가 내려찍는다.
+    ladyHop: {
+      gait: { kind: "hop", periodMs: 820, height: 78, airRatio: 0.84, land: 0.18, tilt: 0.06 },
+      attack: { pose: "divekick", fx: "claw", lunge: 380, reachMul: 1.05, depthMul: 1.0 },
+    },
+    // 6. 둔기 여성. 무기를 어깨에 걸치고 뚜벅뚜벅 오다 크게 휘두른다.
+    // 가로로 쓸어버리므로 깊이 판정이 유난히 넓다. 대신 준비 동작이 길어 보고 피할 수 있다.
+    clubSwing: {
+      gait: { kind: "stride", periodMs: 640, bob: 5, sway: 3, squash: 0.04, tilt: -0.12 },
+      attack: { pose: "swing", fx: "swing", lunge: 90, reachMul: 1.15, depthMul: 1.9 },
+    },
+    // 7. 강남스타일. 말춤으로 갤럽하며 다가와 제자리에서 돈다.
+    // 도는 공격이라 앞뒤를 가리지 않는다(omni). 등 뒤로 돌아도 맞는다.
+    gangnamDance: {
+      gait: { kind: "gallop", periodMs: 360, height: 17, sway: 13, tilt: 0.16 },
+      attack: { pose: "spin", fx: "shock", lunge: 0, reachMul: 0.95, depthMul: 1.5, omni: true },
+    },
+  },
 
   // 이동 규칙별 수치. 체력만 불리는 대신 성격을 다르게 준다.
   enemyBehavior: {
@@ -263,8 +311,8 @@ const CONFIG = {
     maxAliveBase: 2,
     maxAlivePerStage: 0.5,
     maxAliveCap: 5,
-    marginX: 90,          // 화면 밖 어느 정도에서 등장시킬지
-    fromLeftChance: 0.2,  // 흐름은 좌>우 이므로 대부분 오른쪽에서 등장
+    marginX: 90,          // 화면 밖 어느 정도에서 등장시킬지. 맵 경계 너머여도 그대로 쓴다
+    fromLeftChance: 0.45, // 양쪽에서 고르게. 흐름이 좌>우 라 오른쪽만 조금 더 자주
     minorChance: 0.25,    // 다수(major) 사이에 소수(minor)가 섞이는 비율
     frameDuration: 80,
   },
@@ -300,4 +348,9 @@ function stageConfig(stage) {
 /** @returns {object} 에너미 번호별 능력치. */
 function enemyStats(id) {
   return CONFIG.enemies[clamp(id, 1, CONFIG.enemies.length) - 1];
+}
+
+/** @returns {object} 겉모습(이동 리듬 · 공격 자세). 지정이 없으면 기준이 되는 꼬마아이 폴짝. */
+function enemyMotion(name) {
+  return CONFIG.enemyMotion[name] ?? CONFIG.enemyMotion.kidHop;
 }
