@@ -34,6 +34,19 @@ class Actor {
     return this.facing === -1;
   }
 
+  /**
+   * 피격 반폭. 몸집과 원근 배율을 그대로 따라간다.
+   * 공격 쪽은 이 값만큼 사거리를 벌어주므로, 덩치가 클수록 맞히기 쉬워진다.
+   */
+  get hurtHalfWidth() {
+    return this.bodyWidth * this.scale * CONFIG.hitbox.hurtWidthRatio;
+  }
+
+  /** 발끝 y 기준 피격 깊이 반경. */
+  get hurtDepth() {
+    return CONFIG.hitbox.hurtDepth * this.scale;
+  }
+
   /** 히트 이펙트용 흰 플래시. 살아있는 동안만 색을 반환한다. */
   get tint() {
     return this.flashTimer > 0 ? "rgba(255, 245, 245, 0.72)" : null;

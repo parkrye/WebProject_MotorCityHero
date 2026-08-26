@@ -73,6 +73,18 @@ class Hud {
     return width;
   }
 
+  /**
+   * 아이콘 하나 + `X nn`. 두 자리로 고정해 개수가 변해도 폭이 흔들리지 않는다.
+   * @returns {number} 차지한 가로 폭
+   */
+  #drawCount(image, count, x, rowY, labelY) {
+    const { iconSize, iconGap, labelSize } = CONFIG.hud;
+    const text = `X ${String(Math.max(0, count)).padStart(2, "0")}`;
+
+    const iconWidth = this.#icon(image, x, rowY, iconSize) + iconGap;
+    return iconWidth + this.font.draw(this.ctx, text, x + iconWidth, labelY, { size: labelSize });
+  }
+
   #center(text, y, size, alpha = 1) {
     this.font.draw(this.ctx, text, CONFIG.view.width / 2, y, { size, align: "center", alpha });
   }
@@ -80,7 +92,7 @@ class Hud {
   drawStats({ lives, coins, score, hiScore, stage, time, buffs = [], power = 0 }) {
     const ctx = this.ctx;
     const { width } = CONFIG.view;
-    const { barHeight, iconSize, iconGap, labelSize, maxHeartIcons } = CONFIG.hud;
+    const { barHeight, iconSize, iconGap, labelSize, countGap } = CONFIG.hud;
 
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
@@ -91,19 +103,10 @@ class Hud {
     const labelY = rowY + (iconSize - labelSize) / 2 + 2; // 아이콘 높이 기준 세로 중앙
     let x = 24;
 
-    // 생명: 개수만큼 나열하되, 너무 많아지면 아이콘 하나 + X n 으로 줄인다.
-    if (lives <= maxHeartIcons) {
-      for (let i = 0; i < lives; i += 1) {
-        x += this.#icon(this.icons.heartIcon, x, rowY, iconSize) + iconGap;
-      }
-    } else {
-      x += this.#icon(this.icons.heartIcon, x, rowY, iconSize) + iconGap;
-      x += this.font.draw(ctx, `X ${lives}`, x, labelY, { size: labelSize }) + iconGap;
-    }
-
-    x += 26;
-    x += this.#icon(this.icons.coin, x, rowY, iconSize) + iconGap;
-    this.font.draw(ctx, `X ${String(coins).padStart(2, "0")}`, x, labelY, { size: labelSize });
+    // 생명 · 코인 둘 다 아이콘 하나 + X n. 개수만큼 나열하면 생명이 늘어났을 때
+    // 오른쪽 표시를 밀고 들어가므로 폭이 변하지 않는 이 형태로 통일한다.
+    x += this.#drawCount(this.icons.heartIcon, lives, x, rowY, labelY) + countGap;
+    this.#drawCount(this.icons.coin, coins, x, rowY, labelY);
 
     this.font.draw(ctx, `STAGE ${stage}`, width - 24, labelY, { size: labelSize, align: "right" });
     this.#drawTime(time, labelY, labelSize);
@@ -230,10 +233,14 @@ class Hud {
   }
 
   /** @param {{label: string, value: number}[]} lines  이번 스테이지에서 번 점수 내역 */
-  drawStageClear(stage, name, lines, total, { final = false, dim = false } = {}) {
+  /**
+   * 클리어 결과. 점수는 한 줄씩 순서대로 "쾅" 하고 찍힌다.
+   * @param {number} options.elapsed  결과 화면이 뜬 뒤 흐른 시간(ms). 도장 순서를 잡는다
+   */
+  drawStageClear(stage, name, lines, total, { final = false, dim = false, elapsed = Infinity } = {}) {
     const ctx = this.ctx;
     const { width, height } = CONFIG.view;
-    const half = 220;
+    const { stampIntervalMs } = CONFIG.stageClear;
 
     // 필드 위에 그대로 얹을 때는 배경이 밝아 글자가 묻힌다. 한 겹 깔아준다.
     if (dim) {
@@ -247,14 +254,36 @@ class Hud {
     this.#center(final ? "ALL STAGE CLEAR" : `STAGE ${stage}  ${name}`, height * 0.28, 26, 0.85);
 
     let y = height * 0.42;
-    for (const { label, value } of lines) {
-      this.font.draw(ctx, label, width / 2 - half, y, { size: 23, alpha: 0.85 });
-      this.font.draw(ctx, padScore(value), width / 2 + half, y, { size: 23, align: "right", alpha: 0.85 });
+    lines.forEach(({ label, value }, index) => {
+      this.#drawStampRow(label, padScore(value), y, 23, 0.85, elapsed - index * stampIntervalMs);
       y += 36;
-    }
+    });
 
-    this.font.draw(ctx, "TOTAL", width / 2 - half, y + 16, { size: 30 });
-    this.font.draw(ctx, padScore(total), width / 2 + half, y + 16, { size: 30, align: "right" });
+    // TOTAL 은 보너스 줄이 다 찍힌 다음에 마지막으로 박힌다.
+    const totalAge = elapsed - lines.length * stampIntervalMs;
+    this.#drawStampRow("TOTAL", padScore(total), y + 16, 30, 1, totalAge);
+  }
+
+  /**
+   * 도장 한 줄. 아직 차례가 오지 않았으면 아무것도 그리지 않고,
+   * 막 찍힌 순간에는 크게 들어왔다가 제자리 크기로 줄어든다.
+   * @param {number} age  이 줄이 찍힌 뒤 흐른 시간(ms). 음수면 아직 안 찍혔다
+   */
+  #drawStampRow(label, value, y, size, alpha, age) {
+    if (age < 0) return;
+
+    const ctx = this.ctx;
+    const { stampPunchMs, stampScale } = CONFIG.stageClear;
+    const half = 220;
+    const punch = Math.max(0, 1 - age / stampPunchMs);
+    const scale = 1 + punch * stampScale;
+
+    ctx.save();
+    ctx.translate(CONFIG.view.width / 2, y);
+    ctx.scale(scale, scale);
+    this.font.draw(ctx, label, -half, 0, { size, alpha });
+    this.font.draw(ctx, value, half, 0, { size, align: "right", alpha });
+    ctx.restore();
   }
 
   /** 컨티뉴 카운트다운. 이 사이에 코인이 들어오면 이어서 시작한다. */

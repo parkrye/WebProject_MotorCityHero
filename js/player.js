@@ -1,9 +1,15 @@
 // 플레이어. WASD 로 움직이고 J 로 펀치, K 로 킥을 낸다.
-// 상태: idle / walk / attack / hit. 공격과 피격 중에는 이동 입력을 받지 않는다.
+// 상태: idle / walk / attack / hit / clear. 공격과 피격 중에는 이동 입력을 받지 않는다.
 // 펀치와 킥은 대미지와 사거리가 같고, 깊이 판정만 위아래로 갈린다.
 // 생명은 Game 이 들고 있고, 여기서는 "맞았다"까지만 판단한다.
 
-const PLAYER_STATE = { IDLE: "idle", WALK: "walk", ATTACK: "attack", HIT: "hit" };
+const PLAYER_STATE = {
+  IDLE: "idle",
+  WALK: "walk",
+  ATTACK: "attack",
+  HIT: "hit",
+  CLEAR: "clear", // 스테이지 클리어 승리 모션. 입력을 받지 않는다
+};
 
 class Player extends Actor {
   constructor(anims, x, y, { audio = null, buffAnims = {}, powerStacks = 0 } = {}) {
@@ -25,6 +31,8 @@ class Player extends Actor {
     this.powerAnimator?.play("loop");
     // 킥 시트가 아직 없는 빌드에서는 펀치 모션으로 대신 낸다.
     this.kickAnim = anims.kick ? "kick" : PLAYER_STATE.ATTACK;
+    // 승리 모션도 마찬가지. 없으면 그냥 서 있는다.
+    this.clearAnim = anims.clear ? PLAYER_STATE.CLEAR : PLAYER_STATE.IDLE;
     this.kicking = false; // 지금 나가는 공격이 킥인지. 깊이 판정이 갈린다.
 
     this.state = PLAYER_STATE.IDLE;
@@ -115,6 +123,18 @@ class Player extends Actor {
     return this.state === PLAYER_STATE.ATTACK || this.state === PLAYER_STATE.HIT;
   }
 
+  /**
+   * 스테이지를 깼다. 클리어 연출이 끝날 때까지 승리 모션을 돌린다.
+   * 다음 스테이지는 새 Player 로 시작하므로 여기서 풀어줄 필요가 없다.
+   */
+  celebrate() {
+    if (this.downed || this.state === PLAYER_STATE.CLEAR) return;
+
+    this.state = PLAYER_STATE.CLEAR;
+    this.knockbackX = 0;
+    this.animator.play(this.clearAnim, { loop: true, restart: true });
+  }
+
   /** 쓰러졌거나, hit 애니메이션이 도는 동안, 그리고 부활 직후 잠깐은 맞지 않는다. */
   get isInvincible() {
     return this.downed || this.state === PLAYER_STATE.HIT || this.invincibleTimer > 0;
@@ -148,6 +168,9 @@ class Player extends Actor {
     // 쓰러진 뒤에는 애니메이터가 마지막 프레임에서 멈춰 있다. 상태를 건드리지 않는다.
     if (this.downed) return;
 
+    // 승리 모션은 클리어 연출이 끝날 때까지 그대로 둔다.
+    if (this.state === PLAYER_STATE.CLEAR) return;
+
     // 인트로는 화면 밖에서 시작한다. 걸어 들어와 자리를 잡기 전까지는
     // 스테이지 경계를 적용하지 않는다. 클램프하면 왼쪽 끝으로 튀어 들어온다.
     if (this.entering) {
@@ -156,7 +179,7 @@ class Player extends Actor {
     }
 
     if (this.isBusy) {
-      this.#updateBusy();
+      this.#updateBusy(pad, controllable);
     } else if (controllable) {
       this.#updateControl(dt, pad);
     } else {
@@ -190,7 +213,12 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.IDLE);
   }
 
-  #updateBusy() {
+  /**
+   * 공격 · 피격 모션 중. 판정이 끝난 뒤부터는 선입력으로 다음 공격을 바로 이어간다.
+   * 모션이 끝나기를 기다리지 않으므로 빠르게 두 번 누르면 딜레이 없이 붙는다.
+   */
+  #updateBusy(pad, controllable) {
+    if (controllable && this.canChainAttack && this.#tryAttack(pad)) return;
     if (!this.animator.finished) return;
 
     if (this.state === PLAYER_STATE.ATTACK) {
@@ -199,11 +227,30 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.IDLE);
   }
 
-  #updateControl(dt, pad) {
-    if (this.recoveryTimer <= 0) {
-      if (pad.justPressed("action")) return this.#startAttack(false);
-      if (pad.justPressed("kick")) return this.#startAttack(true);
+  /** 판정이 끝난 뒤 구간. 여기서부터 다음 공격으로 캔슬할 수 있다. */
+  get canChainAttack() {
+    if (this.state !== PLAYER_STATE.ATTACK) return false;
+    return this.animator.frame >= CONFIG.input.cancelFromFrame;
+  }
+
+  /**
+   * 선입력을 꺼내 공격을 낸다. 펀치를 먼저 본다.
+   * @returns {boolean} 실제로 냈는지
+   */
+  #tryAttack(pad) {
+    if (pad.consumeBuffered("action")) {
+      this.#startAttack(false);
+      return true;
     }
+    if (pad.consumeBuffered("kick")) {
+      this.#startAttack(true);
+      return true;
+    }
+    return false;
+  }
+
+  #updateControl(dt, pad) {
+    if (this.recoveryTimer <= 0 && this.#tryAttack(pad)) return;
 
     const move = pad.moveVector();
 
@@ -236,17 +283,24 @@ class Player extends Actor {
     this.animator.play(state, { loop: true });
   }
 
-  /** 한 번의 스윙에 같은 대상을 여러 번 때리지 않도록 걸러낸 히트 판정. */
+  /**
+   * 한 번의 스윙에 같은 대상을 여러 번 때리지 않도록 걸러낸 히트 판정.
+   *
+   * 거리는 중심끼리가 아니라 **대상의 몸 가장자리까지** 재므로, 보스처럼 덩치가
+   * 큰 상대는 그만큼 먼저 닿는다. 이게 "공격 판정 < 피격 판정" 의 한쪽 축이다.
+   */
   canHit(target) {
     if (!this.isAttackActive || this.hitThisSwing.has(target)) return false;
 
     const { up, down } = this.attackDepth;
+    const pad = target.hurtDepth;
     const depth = target.y - this.y; // + 가 앞쪽(아래), - 가 안쪽(위)
-    if (depth < -up || depth > down) return false;
+    if (depth < -(up + pad) || depth > down + pad) return false;
 
     const scale = this.scale;
+    const half = target.hurtHalfWidth;
     const dx = (target.x - this.x) * this.facing; // 바라보는 쪽을 + 로
-    return dx > -18 * scale && dx < CONFIG.player.attack.reach * scale;
+    return dx > -(18 * scale + half) && dx < CONFIG.player.attack.reach * scale + half;
   }
 
   registerHit(target) {

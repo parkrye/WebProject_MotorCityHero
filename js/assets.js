@@ -29,13 +29,14 @@ async function loadCharacter(def, durations) {
 }
 
 async function loadPlayer(manifest) {
-  const { attack, hit, idleFrameDuration, walkFrameDuration } = CONFIG.player;
+  const { attack, hit, idleFrameDuration, walkFrameDuration, clearFrameDuration } = CONFIG.player;
   const durations = {
     idle: idleFrameDuration,
     walk: walkFrameDuration,
     attack: attack.frameDuration,
     kick: attack.frameDuration,
     hit: hit.frameDuration,
+    clear: clearFrameDuration,
   };
 
   return loadCharacter(manifest.player, durations);

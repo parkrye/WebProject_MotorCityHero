@@ -41,6 +41,8 @@ PAD_X = 4      # 좌우 크롭 여유
 PLAYER_ANIMS = ("idle", "walk", "attack", "hit")
 # 원본이 아직 없으면 게임이 attack / idle 로 대체하므로 없어도 굽기는 성공한다.
 PLAYER_OPTIONAL_ANIMS = ("kick", "clear")
+# 파일 이름이 달라도 같은 동작이면 받아준다. 왼쪽이 파일 이름, 오른쪽이 매니페스트 키.
+PLAYER_ANIM_ALIASES = {"victory": "clear"}
 ENEMY_COUNT = 7
 STAGE_COUNT = 6
 
@@ -299,6 +301,20 @@ def find_player_gifs(src, name):
     return None
 
 
+def find_optional_gifs(src):
+    """선택 애니메이션. player_victory.gif 처럼 이름이 다른 별칭도 받는다."""
+    wanted = dict(PLAYER_ANIM_ALIASES)
+    wanted.update({a: a for a in PLAYER_OPTIONAL_ANIMS})
+
+    found = {}
+    for base in (src / "player", src):
+        for stem, anim in wanted.items():
+            path = base / ("player_%s.gif" % stem)
+            if anim not in found and path.exists():
+                found[anim] = path
+    return found
+
+
 def strip_checker_background(icon):
     """투명 표시용 체커보드가 픽셀로 그려진 이미지의 배경을 실제 투명으로 바꾼다.
 
@@ -466,8 +482,7 @@ def main():
 
     print("player:")
     paths = find_player_gifs(src, "player")
-    extra = {a: src / ("player_%s.gif" % a) for a in PLAYER_OPTIONAL_ANIMS}
-    extra = {a: path for a, path in extra.items() if path.exists()}
+    extra = find_optional_gifs(src)
 
     if paths is not None:
         groups = {a: load_frames(path) for a, path in {**paths, **extra}.items()}

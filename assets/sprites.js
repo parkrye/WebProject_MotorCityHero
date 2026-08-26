@@ -24,6 +24,10 @@ window.SPRITE_MANIFEST = {
       "kick": {
         "file": "player_kick.png",
         "frames": 8
+      },
+      "clear": {
+        "file": "player_clear.png",
+        "frames": 8
       }
     }
   },
