@@ -636,7 +636,7 @@ class Game {
 
   #updatePickups(dt) {
     for (const pickup of this.pickups) {
-      pickup.update(dt);
+      pickup.update(dt, this.player);
       if (pickup.taken) continue;
       if (this.player.downed || !pickup.overlaps(this.player)) continue;
 
