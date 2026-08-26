@@ -236,17 +236,24 @@ class Player extends Actor {
     this.animator.play(state, { loop: true });
   }
 
-  /** 한 번의 스윙에 같은 대상을 여러 번 때리지 않도록 걸러낸 히트 판정. */
+  /**
+   * 한 번의 스윙에 같은 대상을 여러 번 때리지 않도록 걸러낸 히트 판정.
+   *
+   * 거리는 중심끼리가 아니라 **대상의 몸 가장자리까지** 재므로, 보스처럼 덩치가
+   * 큰 상대는 그만큼 먼저 닿는다. 이게 "공격 판정 < 피격 판정" 의 한쪽 축이다.
+   */
   canHit(target) {
     if (!this.isAttackActive || this.hitThisSwing.has(target)) return false;
 
     const { up, down } = this.attackDepth;
+    const pad = target.hurtDepth;
     const depth = target.y - this.y; // + 가 앞쪽(아래), - 가 안쪽(위)
-    if (depth < -up || depth > down) return false;
+    if (depth < -(up + pad) || depth > down + pad) return false;
 
     const scale = this.scale;
+    const half = target.hurtHalfWidth;
     const dx = (target.x - this.x) * this.facing; // 바라보는 쪽을 + 로
-    return dx > -18 * scale && dx < CONFIG.player.attack.reach * scale;
+    return dx > -(18 * scale + half) && dx < CONFIG.player.attack.reach * scale + half;
   }
 
   registerHit(target) {

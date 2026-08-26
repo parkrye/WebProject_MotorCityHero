@@ -379,7 +379,7 @@ class Game {
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
   }
 
-  /** 제한 시간에서 0 으로. 3분 남는 순간 최종보스가 나오고 0 이 되면 실패한다. */
+  /** 제한 시간에서 0 으로. 60초가 지나면 최종보스가 나오고 0 이 되면 실패한다. */
   #updateStageTimer(dt) {
     this.stageTimer -= dt;
 

@@ -4,7 +4,15 @@
 //
 // 체력만 불리면 다 똑같이 걸어오므로 번호마다 다가오는 규칙을 다르게 준다.
 
-const ENEMY_STATE = { APPROACH: "approach", WINDUP: "windup", COOLDOWN: "cooldown", DYING: "dying" };
+// APPROACH(다가옴) → WINDUP(예고. 판정 없음) → STRIKE(판정이 켜져 있는 짧은 구간)
+// → COOLDOWN. 판정은 STRIKE 동안에만 살아 있으므로 예고를 보고 빠지면 피할 수 있다.
+const ENEMY_STATE = {
+  APPROACH: "approach",
+  WINDUP: "windup",
+  STRIKE: "strike",
+  COOLDOWN: "cooldown",
+  DYING: "dying",
+};
 
 const ENEMY_BEHAVIOR = {
   STRAIGHT: "straight",     // 곧장 다가온다
@@ -17,7 +25,6 @@ const ENEMY_BEHAVIOR = {
 
 const ENEMY_DEATH_MS = 480;
 const ENEMY_STAGGER_MS = 160;
-const ENEMY_DEPTH_TOLERANCE = 26;
 
 class Enemy extends Actor {
   /** @param {boolean} options.boss  최종보스면 체력과 크기를 키운다 */
@@ -25,13 +32,13 @@ class Enemy extends Actor {
     const animator = new Animator(anims);
     animator.play("move");
 
-    const sizeUp = boss ? CONFIG.boss.scaleMultiplier : 1;
     super({
       x,
       y,
       animator,
       maxHp: boss ? Math.round(stats.hp * CONFIG.boss.hpMultiplier) : stats.hp,
-      bodyWidth: animator.sheet.frameWidth * 0.26 * sizeUp,
+      // 배율 적용 전 값이다. 보스 배율은 scale 에 이미 들어 있으므로 여기서 또 곱하지 않는다.
+      bodyWidth: animator.sheet.frameWidth * 0.26,
     });
 
     this.boss = boss;
@@ -45,6 +52,7 @@ class Enemy extends Actor {
 
     // 같은 종류가 여럿 나와도 한 몸처럼 움직이지 않도록 위상을 흩어둔다.
     this.moveTime = Math.random() * 4;
+    this.hitLanded = false; // 한 번의 STRIKE 에 한 대만 들어간다
     this.retreatTimer = 0;
     this.lunging = false;
     this.lungeTimer = CONFIG.enemyBehavior.stalk.waitMs / 1000;
@@ -52,6 +60,20 @@ class Enemy extends Actor {
 
   get scale() {
     return depthScale(this.y) * this.stats.scale * (this.boss ? CONFIG.boss.scaleMultiplier : 1);
+  }
+
+  /**
+   * 공격 판정에만 쓰는 배율. 보스는 몸(scale)만큼 사거리를 늘려주지 않는다.
+   * 몸이 커진 만큼 피격 판정은 이미 커졌으므로, 여기까지 같이 키우면
+   * "때리기는 어렵고 맞기는 쉬운" 역전이 생긴다.
+   */
+  get attackScale() {
+    return depthScale(this.y) * this.stats.scale * (this.boss ? CONFIG.boss.reachMultiplier : 1);
+  }
+
+  /** 접근을 멈추고 준비 동작에 들어가는 거리. 실제 판정은 이보다 좁다. */
+  get approachReach() {
+    return this.stats.attackRange * this.attackScale;
   }
 
   get speed() {
@@ -90,7 +112,8 @@ class Enemy extends Actor {
     this.moveTime += dt;
     if (this.retreatTimer > 0) this.retreatTimer -= dt;
 
-    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup(player);
+    if (this.state === ENEMY_STATE.WINDUP) return this.#updateWindup();
+    if (this.state === ENEMY_STATE.STRIKE) return this.#updateStrike(player);
     if (this.state === ENEMY_STATE.COOLDOWN && this.timer > 0) {
       // 치고 빠지는 부류만 쿨다운 동안 뒤로 물러난다.
       if (this.retreatTimer > 0) this.#retreat(dt, player);
@@ -102,16 +125,33 @@ class Enemy extends Actor {
     return false;
   }
 
-  #updateWindup(player) {
+  /** 준비 동작. 여기서는 판정이 없다. 끝나면 판정을 켠다. */
+  #updateWindup() {
     if (this.timer > 0) return false;
 
-    this.state = ENEMY_STATE.COOLDOWN;
-    this.timer = this.stats.attackCooldown / 1000;
+    this.state = ENEMY_STATE.STRIKE;
+    this.timer = CONFIG.hitbox.enemyActiveMs / 1000;
+    this.hitLanded = false;
+    return false;
+  }
 
-    if (this.behavior === ENEMY_BEHAVIOR.HIT_AND_RUN) {
-      this.retreatTimer = CONFIG.enemyBehavior.hitAndRun.retreatMs / 1000;
+  /**
+   * 판정이 켜져 있는 짧은 구간. 매 프레임 검사하므로 이 동안 창 안에
+   * 들어오면 맞고, 예고를 보고 빠져나갔으면 헛친다.
+   */
+  #updateStrike(player) {
+    const landed = !this.hitLanded && this.#attackHits(player);
+    if (landed) this.hitLanded = true;
+
+    if (this.timer <= 0) {
+      this.state = ENEMY_STATE.COOLDOWN;
+      this.timer = this.stats.attackCooldown / 1000;
+
+      if (this.behavior === ENEMY_BEHAVIOR.HIT_AND_RUN) {
+        this.retreatTimer = CONFIG.enemyBehavior.hitAndRun.retreatMs / 1000;
+      }
     }
-    return this.#inAttackRange(player);
+    return landed;
   }
 
   #approach(dt, player) {
@@ -189,9 +229,23 @@ class Enemy extends Actor {
     this.clampToStage(0);
   }
 
+  /** 준비 동작에 들어갈지. 판정 자체가 아니라 "이쯤에서 팔을 든다" 하는 거리다. */
   #inAttackRange(player) {
-    if (Math.abs(player.y - this.y) > ENEMY_DEPTH_TOLERANCE) return false;
-    return Math.abs(player.x - this.x) <= this.stats.attackRange * this.scale;
+    if (Math.abs(player.y - this.y) > CONFIG.hitbox.enemyDepth * this.attackScale) return false;
+    return Math.abs(player.x - this.x) <= this.approachReach;
+  }
+
+  /**
+   * 실제로 닿는 판정. 접근 사거리보다 enemyReachRatio 만큼 좁고,
+   * 바라보는 쪽으로만 나간다. 대신 플레이어 몸 가장자리까지 재준다.
+   */
+  #attackHits(player) {
+    const depth = CONFIG.hitbox.enemyDepth * this.attackScale + player.hurtDepth;
+    if (Math.abs(player.y - this.y) > depth) return false;
+
+    const half = player.hurtHalfWidth;
+    const dx = (player.x - this.x) * this.facing; // 바라보는 쪽을 + 로
+    return dx > -half && dx < this.approachReach * CONFIG.hitbox.enemyReachRatio + half;
   }
 
   takeDamage(amount, fromX) {
@@ -216,8 +270,9 @@ class Enemy extends Actor {
     const scale = this.scale;
 
     if (!this.isDying) {
-      // 준비 동작은 살짝 뒤로 젖히는 느낌으로 예고한다.
-      const lean = this.state === ENEMY_STATE.WINDUP ? -6 * scale * this.facing : 0;
+      // 준비 동작은 뒤로 젖혔다가, 판정이 켜지는 순간 앞으로 내민다.
+      // 판정이 상시가 아니라 이 구간에만 살아 있으므로 눈으로 읽히게 둔다.
+      const lean = this.#leanOffset() * scale * this.facing;
       drawShadow(ctx, screenX, this.y, this.bodyWidth * scale * 1.1);
       this.animator.draw(ctx, screenX + lean, this.y, scale, this.isFlipped, { tint: this.tint });
       this.#drawHealthBar(ctx, screenX, scale);
@@ -233,6 +288,12 @@ class Enemy extends Actor {
       alpha: 1 - t,
     });
     ctx.restore();
+  }
+
+  #leanOffset() {
+    if (this.state === ENEMY_STATE.WINDUP) return -6;
+    if (this.state === ENEMY_STATE.STRIKE) return 10;
+    return 0;
   }
 
   /** 최종보스는 화면 위에 큰 게이지가 따로 뜨므로 머리 위에는 그리지 않는다. */

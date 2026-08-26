@@ -35,7 +35,9 @@ const CONFIG = {
       damage: 12,
       activeFrom: 3, // 8프레임 중 판정이 살아있는 구간
       activeTo: 5,
-      reach: 118,     // 발 기준 앞쪽 사거리 (배율 적용 전)
+      // 발 기준 앞쪽 사거리(배율 적용 전). 여기에 대상의 피격 반폭이 더해지므로
+      // 덩치가 큰 상대일수록 실제로 닿는 거리가 길어진다.
+      reach: 88,
       depthTolerance: 38,
       depthBias: 15,  // 펀치는 위로, 킥은 아래로 이만큼 창이 옮겨간다
       knockback: 190,
@@ -138,6 +140,17 @@ const CONFIG = {
     rangeY: 30,
   },
 
+  // 판정 상자. 원칙은 하나다 — **공격 판정은 언제나 피격 판정보다 작다.**
+  // 덩치가 커지면 맞기 쉬워지는 게 먼저고, 때리는 창은 그만큼 늘지 않는다.
+  // 그래야 큰 적이 "위협적이지만 공략 가능한" 쪽으로 남는다.
+  hitbox: {
+    hurtWidthRatio: 0.62, // 몸 반폭(bodyWidth) 대비 피격 반폭. 몸보다 조금 좁게 잡는다
+    hurtDepth: 18,        // 발끝 y 기준 피격 깊이 반경 (원근 배율 적용 전)
+    enemyReachRatio: 0.78, // 에너미 공격 판정 / 접근 사거리. 판정이 항상 더 작다
+    enemyActiveMs: 130,    // 공격 판정이 켜져 있는 시간. 이 밖에서는 닿지 않는다
+    enemyDepth: 26,        // 에너미 공격의 깊이 허용치 (원근 배율 적용 전)
+  },
+
   // 에너미 능력치. 스테이지가 아니라 "몇 번 에너미인지" 기준이다.
   // hp 는 플레이어 공격력(12) 기준 "몇 대 맞아야 죽는지"로 잡았다.
   // 반대로 플레이어는 무엇에 맞든 한 대 = 생명 1 이라 에너미 쪽 damage 는 없다.
@@ -198,10 +211,10 @@ const CONFIG = {
     { stage: 6, name: "MYSTERY ZONE",    bgm: "stage6", endless: true },
   ],
 
-  // 스테이지 제한 시간. 5분에서 0 으로 줄고, 3분 남는 순간 최종보스가 나온다.
+  // 스테이지 제한 시간. 5분에서 0 으로 줄고, 4분 남는 순간(60초 경과) 최종보스가 나온다.
   stageTimer: {
     seconds: 300,
-    bossAtRemaining: 180,
+    bossAtRemaining: 240,
     endlessSeconds: 60, // 파밍 스테이지는 1분
     warnRemaining: 30,  // 이 아래로 남으면 시계가 붉게 깜빡인다
   },
@@ -210,6 +223,9 @@ const CONFIG = {
   boss: {
     hpMultiplier: 7,
     scaleMultiplier: 1.55,
+    // 공격 판정에만 쓰는 배율. 몸(1.55배)만큼 사거리까지 늘려주면
+    // 맞히기는 어렵고 맞기는 쉬운 역전이 생긴다. 늘리되 훨씬 얕게 늘린다.
+    reachMultiplier: 1.15,
     scoreMultiplier: 6,
     speedMultiplier: 0.86, // 덩치값을 하느라 조금 느리다
     bannerMs: 1800,
