@@ -156,7 +156,7 @@ class Player extends Actor {
     }
 
     if (this.isBusy) {
-      this.#updateBusy();
+      this.#updateBusy(pad, controllable);
     } else if (controllable) {
       this.#updateControl(dt, pad);
     } else {
@@ -190,7 +190,12 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.IDLE);
   }
 
-  #updateBusy() {
+  /**
+   * 공격 · 피격 모션 중. 판정이 끝난 뒤부터는 선입력으로 다음 공격을 바로 이어간다.
+   * 모션이 끝나기를 기다리지 않으므로 빠르게 두 번 누르면 딜레이 없이 붙는다.
+   */
+  #updateBusy(pad, controllable) {
+    if (controllable && this.canChainAttack && this.#tryAttack(pad)) return;
     if (!this.animator.finished) return;
 
     if (this.state === PLAYER_STATE.ATTACK) {
@@ -199,11 +204,30 @@ class Player extends Actor {
     this.#enterState(PLAYER_STATE.IDLE);
   }
 
-  #updateControl(dt, pad) {
-    if (this.recoveryTimer <= 0) {
-      if (pad.justPressed("action")) return this.#startAttack(false);
-      if (pad.justPressed("kick")) return this.#startAttack(true);
+  /** 판정이 끝난 뒤 구간. 여기서부터 다음 공격으로 캔슬할 수 있다. */
+  get canChainAttack() {
+    if (this.state !== PLAYER_STATE.ATTACK) return false;
+    return this.animator.frame >= CONFIG.input.cancelFromFrame;
+  }
+
+  /**
+   * 선입력을 꺼내 공격을 낸다. 펀치를 먼저 본다.
+   * @returns {boolean} 실제로 냈는지
+   */
+  #tryAttack(pad) {
+    if (pad.consumeBuffered("action")) {
+      this.#startAttack(false);
+      return true;
     }
+    if (pad.consumeBuffered("kick")) {
+      this.#startAttack(true);
+      return true;
+    }
+    return false;
+  }
+
+  #updateControl(dt, pad) {
+    if (this.recoveryTimer <= 0 && this.#tryAttack(pad)) return;
 
     const move = pad.moveVector();
 

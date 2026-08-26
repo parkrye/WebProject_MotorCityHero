@@ -24,11 +24,13 @@ class Pad {
   constructor() {
     this.held = new Set();
     this.pressed = new Set(); // 이번 프레임에 새로 눌린 키
+    this.bufferedAt = new Map(); // 선입력. 액션 -> 눌린 시각(ms)
   }
 
   press(action) {
     this.held.add(action);
     this.pressed.add(action);
+    this.bufferedAt.set(action, performance.now());
   }
 
   release(action) {
@@ -46,6 +48,23 @@ class Pad {
   /** 공격이자 메뉴 확인. 게임 안에서는 때리고, 화면에서는 고른다. */
   get confirmed() {
     return this.justPressed("action");
+  }
+
+  /**
+   * 선입력을 꺼내 쓴다. 눌린 지 bufferMs 안이면 소비하고 true.
+   * 낼 수 없는 타이밍에 누른 입력이 버려지지 않고 가능해지는 순간 나간다.
+   */
+  consumeBuffered(action) {
+    const at = this.bufferedAt.get(action);
+    if (at === undefined) return false;
+
+    this.bufferedAt.delete(action);
+    return performance.now() - at <= CONFIG.input.bufferMs;
+  }
+
+  /** 화면이 바뀔 때. 남아 있던 입력이 다음 화면으로 새지 않게 비운다. */
+  clearBuffer() {
+    this.bufferedAt.clear();
   }
 
   /** -1 ~ 1 이동 벡터. 대각선도 속도가 같도록 정규화한다. */
@@ -76,7 +95,10 @@ class Input {
 
     window.addEventListener("keydown", (event) => this.#onKeyDown(event));
     window.addEventListener("keyup", (event) => this.#onKeyUp(event));
-    window.addEventListener("blur", () => this.pad.held.clear());
+    window.addEventListener("blur", () => {
+      this.pad.held.clear();
+      this.pad.clearBuffer();
+    });
   }
 
   /** 터치 조이패드처럼 키보드 밖에서 들어오는 입력도 같은 창구를 쓴다. */
@@ -129,6 +151,10 @@ class Input {
 
   menuStep() {
     return this.pad.step();
+  }
+
+  clearBuffer() {
+    this.pad.clearBuffer();
   }
 
   /** 프레임 끝에서 호출. justPressed 를 한 프레임만 살아있게 한다. */

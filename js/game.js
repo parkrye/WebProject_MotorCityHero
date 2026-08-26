@@ -102,6 +102,7 @@ class Game {
     this.countdownTimer = CONFIG.intro.countdownMs / 1000;
     this.state = GAME_STATE.INTRO;
 
+    this.input.clearBuffer(); // 인트로 전에 눌린 입력이 시작하자마자 튀어나오지 않게
     this.spawner.reset(this.stageDef);
     this.#createPlayer();
     this.audio.playBgm(this.stageDef.bgm);
@@ -545,6 +546,7 @@ class Game {
       this.stageTimer = this.#stageSeconds();
     }
 
+    this.input.clearBuffer();
     this.spawner.timer = CONFIG.spawn.firstDelay / 1000;
     this.state = GAME_STATE.PLAYING;
   }
