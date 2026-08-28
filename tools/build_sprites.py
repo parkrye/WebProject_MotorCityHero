@@ -12,6 +12,8 @@ canvas 의 drawImage 는 애니메이션 GIF 의 프레임을 제어할 수 없�
 원본 폴더 구조 (전부 선택):
     player_idle.gif / player_walk.gif / player_attack.gif / player_hit.gif
     player_kick.gif / player_clear.gif   없으면 게임이 attack / idle 로 대체한다
+    player_jump.gif                      점프. 없으면 게임이 idle 로 대체한다
+    player_jumpattack1 / 2 (.gif|.png)   점프 펀치 · 점프 킥. PNG 는 가로 스트립으로 읽는다
     game_bg.png                          스테이지 2(디트로이트) 배경
     bg_stage1.png ... bg_stage6.png      스테이지별 배경. 없는 번호는 game_bg 로 남는다
     illust_clear.png                     스테이지 클리어 연출 일러스트
@@ -40,9 +42,11 @@ PAD_X = 4      # 좌우 크롭 여유
 
 PLAYER_ANIMS = ("idle", "walk", "attack", "hit")
 # 원본이 아직 없으면 게임이 attack / idle 로 대체하므로 없어도 굽기는 성공한다.
-PLAYER_OPTIONAL_ANIMS = ("kick", "clear")
+PLAYER_OPTIONAL_ANIMS = ("kick", "clear", "jump")
 # 파일 이름이 달라도 같은 동작이면 받아준다. 왼쪽이 파일 이름, 오른쪽이 매니페스트 키.
-PLAYER_ANIM_ALIASES = {"victory": "clear"}
+PLAYER_ANIM_ALIASES = {"victory": "clear", "jumpattack1": "jumpAttack", "jumpattack2": "jumpKick"}
+# 선택 애니메이션은 GIF 말고 가로 스트립 PNG 로 와도 받는다.
+FRAME_SOURCE_EXTS = (".gif", ".png")
 ENEMY_COUNT = 7
 STAGE_COUNT = 6
 
@@ -103,12 +107,21 @@ def save_quantized(image, path, colors):
 
 
 def load_frames(path):
+    """애니메이션 GIF 는 프레임을, 가로 스트립 PNG 는 정사각 칸을 프레임으로 읽는다."""
     im = Image.open(path)
-    frames = []
-    for i in range(im.n_frames):
-        im.seek(i)
-        frames.append(im.convert("RGBA"))
-    return frames
+    count = getattr(im, "n_frames", 1)
+    if count > 1:
+        frames = []
+        for i in range(count):
+            im.seek(i)
+            frames.append(im.convert("RGBA"))
+        return frames
+
+    # 한 장짜리는 가로로 이어붙인 스트립으로 본다. 프레임은 세로 크기와 같은 정사각이다.
+    sheet = im.convert("RGBA")
+    width = sheet.height
+    return [sheet.crop((i * width, 0, (i + 1) * width, sheet.height))
+            for i in range(max(1, sheet.width // width))]
 
 
 def union_x_range(frame_groups):
@@ -301,7 +314,7 @@ def find_player_gifs(src, name):
     return None
 
 
-def find_optional_gifs(src):
+def find_optional_frames(src):
     """선택 애니메이션. player_victory.gif 처럼 이름이 다른 별칭도 받는다."""
     wanted = dict(PLAYER_ANIM_ALIASES)
     wanted.update({a: a for a in PLAYER_OPTIONAL_ANIMS})
@@ -309,9 +322,10 @@ def find_optional_gifs(src):
     found = {}
     for base in (src / "player", src):
         for stem, anim in wanted.items():
-            path = base / ("player_%s.gif" % stem)
-            if anim not in found and path.exists():
-                found[anim] = path
+            for ext in FRAME_SOURCE_EXTS:
+                path = base / ("player_%s%s" % (stem, ext))
+                if anim not in found and path.exists():
+                    found[anim] = path
     return found
 
 
@@ -482,7 +496,7 @@ def main():
 
     print("player:")
     paths = find_player_gifs(src, "player")
-    extra = find_optional_gifs(src)
+    extra = find_optional_frames(src)
 
     if paths is not None:
         groups = {a: load_frames(path) for a, path in {**paths, **extra}.items()}

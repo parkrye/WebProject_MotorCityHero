@@ -28,6 +28,18 @@ window.SPRITE_MANIFEST = {
       "clear": {
         "file": "player_clear.png",
         "frames": 8
+      },
+      "jumpAttack": {
+        "file": "player_jumpAttack.png",
+        "frames": 8
+      },
+      "jumpKick": {
+        "file": "player_jumpKick.png",
+        "frames": 8
+      },
+      "jump": {
+        "file": "player_jump.png",
+        "frames": 6
       }
     }
   },

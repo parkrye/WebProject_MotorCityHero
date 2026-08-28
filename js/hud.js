@@ -152,8 +152,8 @@ class Hud {
   /** 하단 조작 안내. */
   drawControls() {
     const text = this.touch
-      ? "STICK MOVE    A PUNCH    B KICK    P COIN"
-      : "WASD MOVE    J PUNCH    K KICK    P COIN";
+      ? "STICK MOVE  RED JUMP  YELLOW PUNCH  GREEN KICK  COIN"
+      : "WASD MOVE   J JUMP   K PUNCH   L KICK   P COIN";
     this.#center(text, CONFIG.view.height - 54, 20, 0.8);
   }
 
@@ -174,7 +174,7 @@ class Hud {
     this.drawFade(1);
     this.#center("THANK YOU FOR PLAYING", height * 0.36, 52);
     this.#center("CLOSE THIS TAB TO QUIT", height * 0.52, 24, 0.7);
-    this.#center(this.touch ? "TAP A TO GO BACK" : "PRESS ACTION TO GO BACK", height * 0.66, 22, 0.5);
+    this.#center(this.touch ? "TAP ANY BUTTON TO GO BACK" : "PRESS ACTION TO GO BACK", height * 0.66, 22, 0.5);
   }
 
   drawCountdown(text) {
@@ -300,7 +300,7 @@ class Hud {
     const shown = countdownNumber(secondsLeft);
     if (shown !== null) this.#center(String(shown), height * 0.36, 132);
     this.#center(this.touch ? "TAP P TO INSERT COIN" : "PRESS P TO INSERT COIN", height * 0.68, 26);
-    this.#center(this.touch ? "TAP A OR B TO HURRY" : "ANY OTHER KEY TO HURRY", height * 0.76, 18, 0.7);
+    this.#center(this.touch ? "TAP ANY BUTTON TO HURRY" : "ANY OTHER KEY TO HURRY", height * 0.76, 18, 0.7);
   }
 
   /** 컨티뉴 실패 후 암전. */
@@ -320,7 +320,7 @@ class Hud {
     if (cleared) this.#center("CONGRATULATIONS", height * 0.36, 28, 0.85);
     this.#center(`SCORE ${padScore(score)}`, height * 0.45, 34);
     this.#center(`HI SCORE ${padScore(hiScore)}`, height * 0.54, 26);
-    const hint = this.touch ? "TAP A TO REGISTER YOUR NAME" : "PRESS ACTION TO REGISTER YOUR NAME";
+    const hint = this.touch ? "TAP ANY BUTTON TO REGISTER YOUR NAME" : "PRESS ACTION TO REGISTER YOUR NAME";
     this.#center(hint, height * 0.7, 24);
   }
 }

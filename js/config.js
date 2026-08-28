@@ -44,10 +44,22 @@ const CONFIG = {
       knockback: 190,
       recovery: 60,
     },
-    // 한 대 맞으면 생명 1 감소. 무적은 hit 애니메이션이 도는 동안만 유지된다.
+    // 위로 폴짝. 발밑 좌표(깊이)는 그대로 두고 그림만 뜬다 — 판정은 늘 지면 기준이다.
+    // 체공 = 2*speed/gravity ≈ 0.72초, 정점 = speed*speed/(2*gravity) ≈ 69px.
+    // 공중에서 낸 공격은 점프 공격 모션으로 나가고, 대미지 · 사거리는 지상과 같다.
+    jump: {
+      speed: 380,         // 초기 상승 속도(px/s). 그릴 때 원근 배율이 곱해진다
+      gravity: 1050,
+      frameDuration: 120, // 6프레임 x 120ms 라 애니메이션 한 바퀴가 곧 체공 시간이다
+      invincibleMs: 300,  // 뜨는 순간부터 이만큼만 무적. 내려오는 동안은 그대로 맞는다
+      landRecoveryMs: 90, // 착지 후딜. 뛰기만 반복하지 못하게
+    },
+    // 한 대 맞으면 생명 1 감소. 넘어져 누워 있는 동안과 일어난 직후까지 무적이다.
     hit: {
       frameDuration: 70,
       knockback: 210,
+      downMs: 320,            // 쓰러진 마지막 프레임 그대로 누워 있는 시간
+      invincibleAfterMs: 500, // 일어난 뒤에도 이만큼 더. 그동안 흰색으로 깜빡인다
     },
     continueGraceMs: 1200, // 컨티뉴 직후 잠깐 무적
     idleFrameDuration: 120,

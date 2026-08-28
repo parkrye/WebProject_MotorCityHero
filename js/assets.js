@@ -29,7 +29,7 @@ async function loadCharacter(def, durations) {
 }
 
 async function loadPlayer(manifest) {
-  const { attack, hit, idleFrameDuration, walkFrameDuration, clearFrameDuration } = CONFIG.player;
+  const { attack, hit, jump, idleFrameDuration, walkFrameDuration, clearFrameDuration } = CONFIG.player;
   const durations = {
     idle: idleFrameDuration,
     walk: walkFrameDuration,
@@ -37,6 +37,10 @@ async function loadPlayer(manifest) {
     kick: attack.frameDuration,
     hit: hit.frameDuration,
     clear: clearFrameDuration,
+    // 점프 모션 한 바퀴가 곧 체공 시간이다. 점프 공격은 지상 공격과 같은 속도로 돈다.
+    jump: jump.frameDuration,
+    jumpAttack: attack.frameDuration,
+    jumpKick: attack.frameDuration,
   };
 
   return loadCharacter(manifest.player, durations);

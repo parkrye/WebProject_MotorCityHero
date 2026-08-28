@@ -1,10 +1,14 @@
 // 키 입력 상태 관리.
 //
 // 이 게임이 받는 키는 아래가 전부다. 마우스와 나머지 키는 전부 무시한다.
-//   이동        : W A S D
-//   펀치 · 확인 : J
-//   킥          : K
-//   코인 투입   : P
+//   이동      : W A S D
+//   점프      : J
+//   펀치      : K
+//   킥        : L
+//   코인 투입 : P
+//
+// 메뉴 · 이름 등록 · 랭킹의 "확인"은 J K L 아무거나 받는다.
+// 모바일에는 버튼에 글자가 없어서 어느 하나만 확인키로 두면 알아볼 방법이 없다.
 //
 // 판정은 event.code 기준이라 NumLock 상태와 무관하고,
 // 문자열 위쪽의 숫자열(Digit0~9)은 어떤 동작에도 매핑되지 않는다.
@@ -14,10 +18,14 @@ const KEY_MAP = {
   KeyS: "down",
   KeyA: "left",
   KeyD: "right",
-  KeyJ: "action", // 펀치. 화면에서는 확인키로도 쓴다
-  KeyK: "kick",
+  KeyJ: "jump",
+  KeyK: "action", // 펀치
+  KeyL: "kick",
   KeyP: "coin",   // 오락실 코인 투입 흉내
 };
+
+// 화면에서 확인키로도 쓰이는 동작들. 게임 안에서 쓰는 세 버튼 그대로다.
+const CONFIRM_ACTIONS = ["jump", "action", "kick"];
 
 /** 눌림 상태. 키보드와 (모바일) 터치 조이패드가 같은 창구를 쓴다. */
 class Pad {
@@ -45,9 +53,9 @@ class Pad {
     return this.pressed.has(action);
   }
 
-  /** 공격이자 메뉴 확인. 게임 안에서는 때리고, 화면에서는 고른다. */
+  /** 메뉴 확인. 게임 안에서는 뛰거나 때리고, 화면에서는 고른다. */
   get confirmed() {
-    return this.justPressed("action");
+    return CONFIRM_ACTIONS.some((action) => this.justPressed(action));
   }
 
   /**
