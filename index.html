@@ -17,11 +17,13 @@
     <div class="stick" data-stick>
       <span class="knob" data-knob></span>
     </div>
+    <!-- 오락기처럼 글자 없이 색으로만 구분한다. 왼쪽부터 J(빨강) K(노랑) L(초록). -->
     <div class="buttons">
-      <button type="button" class="key kick" data-action="kick">B</button>
-      <button type="button" class="key punch" data-action="action">A</button>
+      <button type="button" class="key jump" data-action="jump" aria-label="JUMP"></button>
+      <button type="button" class="key punch" data-action="action" aria-label="PUNCH"></button>
+      <button type="button" class="key kick" data-action="kick" aria-label="KICK"></button>
     </div>
-    <button type="button" class="key coin" data-action="coin">P</button>
+    <button type="button" class="key coin" data-action="coin" aria-label="INSERT COIN"></button>
   </div>
 
   <!-- build_sprites.py 가 구운 스프라이트 매니페스트 -->

@@ -76,17 +76,14 @@ body.touch-enabled .touch {
   pointer-events: auto;
   position: absolute;
   touch-action: none;
-  border: 2px solid rgba(255, 214, 92, 0.55);
-  background: rgba(10, 14, 24, 0.42);
-  color: #ffd65c;
-  font-family: inherit;
-  font-weight: bold;
+  border: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* 오락기 스틱. 어두운 금속 받침 안에 빨간 볼탑이 앉아 있다. */
 .stick {
   left: 5vmin;
   bottom: 6vmin;
@@ -94,14 +91,19 @@ body.touch-enabled .touch {
   height: 32vmin;
   max-width: 190px;
   max-height: 190px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.55) 0 46%, rgba(0, 0, 0, 0) 62%),
+    radial-gradient(circle at 50% 28%, #414a5e 0%, #1a202c 68%, #090c13 100%);
+  box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.75), 0 4px 16px rgba(0, 0, 0, 0.55);
 }
 
+/* 빨간 볼탑. 왼쪽 위에서 빛을 받는 구슬로 보이게 한다. */
 .knob {
-  width: 42%;
-  height: 42%;
+  width: 52%;
+  height: 52%;
   border-radius: 50%;
-  background: rgba(255, 214, 92, 0.35);
-  border: 2px solid rgba(255, 214, 92, 0.7);
+  background: radial-gradient(circle at 34% 26%, #ffb9ae 0%, #ef4136 40%, #ad140f 74%, #4f0604 100%);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.65), inset 0 -8px 16px rgba(0, 0, 0, 0.45);
   transition: transform 60ms linear;
 }
 
@@ -109,46 +111,73 @@ body.touch-enabled .touch {
   position: absolute;
   right: 5vmin;
   bottom: 6vmin;
-  width: 42vmin;
-  height: 32vmin;
-  max-width: 250px;
-  max-height: 190px;
+  width: 52vmin;
+  height: 40vmin;
+  max-width: 320px;
+  max-height: 250px;
 }
 
+/* 세 버튼은 크기와 입체감만 공유하고 색으로 구분한다. */
+.key.jump,
 .key.punch,
 .key.kick {
   width: 17vmin;
   height: 17vmin;
   max-width: 100px;
   max-height: 100px;
-  font-size: 5vmin;
+  box-shadow:
+    0 5px 0 rgba(0, 0, 0, 0.5),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.4),
+    inset 0 7px 12px rgba(255, 255, 255, 0.32);
 }
 
-/* A 를 아래쪽 · 바깥에 둔다. 엄지가 자연스럽게 닿는 자리다. */
+/* 왼쪽 위에서 오른쪽 아래로 J K L. 엄지에 가까운 자리가 맨 오른쪽이다. */
+.key.jump {
+  right: 32vmin;
+  bottom: 18vmin;
+  background: radial-gradient(circle at 34% 28%, #ff9d92 0%, #f0403a 44%, #9c110d 100%);
+}
+
 .key.punch {
-  right: 0;
-  bottom: 0;
+  right: 16vmin;
+  bottom: 9vmin;
+  background: radial-gradient(circle at 34% 28%, #ffe89a 0%, #f5c116 44%, #9a6b00 100%);
 }
 
 .key.kick {
-  right: 17vmin;
-  bottom: 12vmin;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 34% 28%, #a6ffb8 0%, #2fbf51 44%, #0c6626 100%);
 }
 
-/* 코인은 실수로 누르면 곤란하니 구석에 작게 둔다. */
+/* 코인은 실수로 누르면 곤란하니 구석에 작게 둔다. 글자 대신 동전 모양으로 알린다. */
 .key.coin {
   top: 2vmin;
   right: 2vmin;
-  width: 9vmin;
-  height: 9vmin;
-  max-width: 54px;
-  max-height: 54px;
-  font-size: 3.4vmin;
-  opacity: 0.7;
+  width: 11vmin;
+  height: 11vmin;
+  max-width: 64px;
+  max-height: 64px;
+  background: radial-gradient(circle at 34% 28%, #fff6cd 0%, #ffd24a 38%, #c9900f 72%, #6f4a00 100%);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
+  opacity: 0.9;
 }
 
+/* 동전 안쪽 테두리. 이거 하나로 단색 원이 아니라 동전으로 읽힌다. */
+.key.coin::before {
+  content: "";
+  position: absolute;
+  inset: 19%;
+  border-radius: 50%;
+  border: 2px solid rgba(111, 74, 0, 0.5);
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.45);
+}
+
+/* 눌린 동안은 살짝 들어가고 밝아진다. 색은 버튼마다 다르므로 건드리지 않는다. */
 .key.down {
-  background: rgba(255, 214, 92, 0.32);
+  filter: brightness(1.3);
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), inset 0 6px 14px rgba(0, 0, 0, 0.5);
 }
 
 /* 세로 화면에서는 캔버스 아래에 넉넉한 여백이 생긴다. 거기로 내려서 화면을 가리지 않는다. */
@@ -158,15 +187,27 @@ body.touch-enabled .touch {
     bottom: 4vh;
   }
 
-  .key.punch,
-  .key.kick {
-    width: 22vmin;
-    height: 22vmin;
-    font-size: 6.5vmin;
+  /* 스틱과 부딪히지 않는 선에서 최대한 키우고, 셋이 겹치지 않게 벌린다. */
+  .buttons {
+    right: 3vmin;
+    width: 57vmin;
+    height: 39vmin;
   }
 
+  .key.jump,
+  .key.punch,
   .key.kick {
-    right: 22vmin;
-    bottom: 14vmin;
+    width: 19vmin;
+    height: 19vmin;
+  }
+
+  .key.jump {
+    right: 38vmin;
+    bottom: 20vmin;
+  }
+
+  .key.punch {
+    right: 19vmin;
+    bottom: 9vmin;
   }
 }
