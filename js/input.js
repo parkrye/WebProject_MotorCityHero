@@ -1,0 +1,187 @@
+// 키 입력 상태 관리.
+//
+// 이 게임이 받는 키는 아래가 전부다. 마우스와 나머지 키는 전부 무시한다.
+//   이동      : W A S D
+//   점프      : J
+//   펀치      : K
+//   킥        : L
+//   코인 투입 : P
+//
+// 메뉴 · 이름 등록 · 랭킹의 "확인"은 J K L 아무거나 받는다.
+// 모바일에는 버튼에 글자가 없어서 어느 하나만 확인키로 두면 알아볼 방법이 없다.
+//
+// 판정은 event.code 기준이라 NumLock 상태와 무관하고,
+// 문자열 위쪽의 숫자열(Digit0~9)은 어떤 동작에도 매핑되지 않는다.
+
+const KEY_MAP = {
+  KeyW: "up",
+  KeyS: "down",
+  KeyA: "left",
+  KeyD: "right",
+  KeyJ: "jump",
+  KeyK: "action", // 펀치
+  KeyL: "kick",
+  KeyP: "coin",   // 오락실 코인 투입 흉내
+};
+
+// 화면에서 확인키로도 쓰이는 동작들. 게임 안에서 쓰는 세 버튼 그대로다.
+const CONFIRM_ACTIONS = ["jump", "action", "kick"];
+
+/** 눌림 상태. 키보드와 (모바일) 터치 조이패드가 같은 창구를 쓴다. */
+class Pad {
+  constructor() {
+    this.held = new Set();
+    this.pressed = new Set(); // 이번 프레임에 새로 눌린 키
+    this.bufferedAt = new Map(); // 선입력. 액션 -> 눌린 시각(ms)
+  }
+
+  press(action) {
+    this.held.add(action);
+    this.pressed.add(action);
+    this.bufferedAt.set(action, performance.now());
+  }
+
+  release(action) {
+    this.held.delete(action);
+  }
+
+  isHeld(action) {
+    return this.held.has(action);
+  }
+
+  justPressed(action) {
+    return this.pressed.has(action);
+  }
+
+  /** 메뉴 확인. 게임 안에서는 뛰거나 때리고, 화면에서는 고른다. */
+  get confirmed() {
+    return CONFIRM_ACTIONS.some((action) => this.justPressed(action));
+  }
+
+  /**
+   * 선입력을 꺼내 쓴다. 눌린 지 bufferMs 안이면 소비하고 true.
+   * 낼 수 없는 타이밍에 누른 입력이 버려지지 않고 가능해지는 순간 나간다.
+   */
+  consumeBuffered(action) {
+    const at = this.bufferedAt.get(action);
+    if (at === undefined) return false;
+
+    this.bufferedAt.delete(action);
+    return performance.now() - at <= CONFIG.input.bufferMs;
+  }
+
+  /** 화면이 바뀔 때. 남아 있던 입력이 다음 화면으로 새지 않게 비운다. */
+  clearBuffer() {
+    this.bufferedAt.clear();
+  }
+
+  /** -1 ~ 1 이동 벡터. 대각선도 속도가 같도록 정규화한다. */
+  moveVector() {
+    let x = (this.isHeld("right") ? 1 : 0) - (this.isHeld("left") ? 1 : 0);
+    let y = (this.isHeld("down") ? 1 : 0) - (this.isHeld("up") ? 1 : 0);
+
+    if (x !== 0 && y !== 0) {
+      const inv = Math.SQRT1_2;
+      x *= inv;
+      y *= inv;
+    }
+    return { x, y };
+  }
+
+  /**
+   * 이번 프레임에 새로 눌린 키가 하나라도 있는지.
+   * @param {string[]} exclude  따로 처리하는 동작(코인 등)은 빼고 본다
+   */
+  pressedAny(exclude = []) {
+    for (const action of this.pressed) {
+      if (!exclude.includes(action)) return true;
+    }
+    return false;
+  }
+
+  /** 메뉴용. 누르고 있어도 한 칸만 움직이도록 눌린 순간만 본다. */
+  step() {
+    const x = (this.justPressed("right") ? 1 : 0) - (this.justPressed("left") ? 1 : 0);
+    const y = (this.justPressed("down") ? 1 : 0) - (this.justPressed("up") ? 1 : 0);
+    return { x, y };
+  }
+}
+
+class Input {
+  constructor() {
+    this.pad = new Pad();
+    this.onFirstKey = null; // 오디오 잠금 해제용. 첫 입력 때 한 번만 불린다.
+
+    window.addEventListener("keydown", (event) => this.#onKeyDown(event));
+    window.addEventListener("keyup", (event) => this.#onKeyUp(event));
+    window.addEventListener("blur", () => {
+      this.pad.held.clear();
+      this.pad.clearBuffer();
+    });
+  }
+
+  /** 터치 조이패드처럼 키보드 밖에서 들어오는 입력도 같은 창구를 쓴다. */
+  press(action) {
+    this.#notifyFirstInput();
+    this.pad.press(action);
+  }
+
+  release(action) {
+    this.pad.release(action);
+  }
+
+  #notifyFirstInput() {
+    // 브라우저는 사용자 입력 전에 소리를 내주지 않는다. 첫 입력에서 잠금을 푼다.
+    if (!this.onFirstKey) return;
+    this.onFirstKey();
+    this.onFirstKey = null;
+  }
+
+  #onKeyDown(event) {
+    const action = KEY_MAP[event.code];
+    if (!action) return;
+
+    event.preventDefault(); // 화살표로 페이지가 스크롤되지 않게
+    if (event.repeat) return;
+
+    this.#notifyFirstInput();
+    this.pad.press(action);
+  }
+
+  #onKeyUp(event) {
+    const action = KEY_MAP[event.code];
+    if (!action) return;
+
+    event.preventDefault();
+    this.pad.release(action);
+  }
+
+  isHeld(action) {
+    return this.pad.isHeld(action);
+  }
+
+  justPressed(action) {
+    return this.pad.justPressed(action);
+  }
+
+  get confirmed() {
+    return this.pad.confirmed;
+  }
+
+  justPressedAny(exclude = []) {
+    return this.pad.pressedAny(exclude);
+  }
+
+  menuStep() {
+    return this.pad.step();
+  }
+
+  clearBuffer() {
+    this.pad.clearBuffer();
+  }
+
+  /** 프레임 끝에서 호출. justPressed 를 한 프레임만 살아있게 한다. */
+  endFrame() {
+    this.pad.pressed.clear();
+  }
+}
