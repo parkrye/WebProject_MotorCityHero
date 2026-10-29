@@ -5,6 +5,10 @@
 ![타이틀](screenshots/title.png)
 ![스테이지 1](screenshots/stage1.png)
 
+[![플레이 영상](https://img.youtube.com/vi/E6shtjULxI0/hqdefault.jpg)](https://youtu.be/E6shtjULxI0)
+
+▶ **플레이 영상**: https://youtu.be/E6shtjULxI0
+
 ## 플레이
 
 - **브라우저에서 바로**: https://parkrye.github.io/WebProject_MotorCityHero/ (PC · 모바일)
